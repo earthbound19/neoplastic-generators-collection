@@ -7,7 +7,7 @@
 // ADDITIONAL FEATURES
 // Features have been added since that base port:
 // - update to dynamic grid system that keeps grid division (resultant cells) roughly (or exactly) square for any canvas aspect ratio
-// - implement color palette retrieval, via button press, from a palette collection API: https://earthbound.io/data/random_ebPalette/
+// - implement color palette retrieval, via button press, from a palette collection API: https://earthbound.io/api/palettes
 //   - with a text field for how many colors from the palette so use (subset, 0 = all colors, a number higher than available will
 //     auto-clamp to the total available)
 // - PNG and SVG export with full embedded (SVG) or txt sidecar (PNG) metadata of all creation paramaters (grammar, palette name etc.)
@@ -83,7 +83,7 @@
 // a museum could just reboot the art on any extremely rare occassion it happens. Or for
 // all I know it was a cosmic ray flipping a bit.
 
-String scriptVersion = "2.15.15";
+String scriptVersion = "2.16.2";
 String scriptName = "Mondrian_Processing";
 String paletteSource = "custom_mondrian";
 String lastAPIPaletteName = "";
@@ -205,7 +205,7 @@ final color LINE_COLOR = #050506;
 color[] fullPalette;
 color[] activePalette;
 
-String apiURL = "https://earthbound.io/data/random_ebPalette/";
+String apiURL = "https://earthbound.io/api/palettes/random?min=3";
 
 // ArrayLists for dynamic arrays
 ArrayList<Integer> A_gr;
