@@ -21,6 +21,8 @@ ControlP5 cp5;
 Textfield grammarField;
 Textfield percentField;
 Textfield colorCountField;
+Textfield apiColorsMinField;
+Textfield apiColorsMaxField;
 Toggle rapidLinesToggle;
 Toggle rapidPatchToggle;
 Toggle rapidColourToggle;
@@ -45,7 +47,7 @@ void setupUI() {
   int buttonWidth = 70;
   int spacing = 10;
   int rowHeight = 25;
-  int labelX = 20;
+  int labelX = 10;
   int fieldY = uiY + 10;
   
   grammarField = cp5.addTextfield("grammarField")
@@ -58,7 +60,7 @@ void setupUI() {
 
    cp5.addButton("shuffleGrammar")
       .setPosition(labelX + fieldWidth + spacing, fieldY)
-      .setSize(buttonWidth, rowHeight)
+      .setSize(buttonWidth + spacing, rowHeight)
       .setLabel("SHUFFLE GRAMMAR")
       .setColorCaptionLabel(color(255));
 
@@ -74,7 +76,23 @@ void setupUI() {
      .setPosition(labelX + spacing + buttonWidth + spacing + fieldWidth + spacing + smallFieldWidth + spacing, fieldY)
      .setSize(smallFieldWidth, rowHeight)
      .setText("7")
-     .setLabel("# COLORS USED (0=all)")
+     .setLabel("#COLORS, 0=ALL")
+     .setAutoClear(false)
+     .setColorCaptionLabel(color(255));
+
+  apiColorsMinField = cp5.addTextfield("apiColorsMinField")
+     .setPosition(labelX + spacing + buttonWidth + spacing + fieldWidth + spacing + ((smallFieldWidth + spacing) * 2), fieldY)
+     .setSize(smallFieldWidth, rowHeight)
+     .setText("3")
+     .setLabel(" API MIN #COLORS")
+     .setAutoClear(false)
+     .setColorCaptionLabel(color(255));
+
+  apiColorsMaxField = cp5.addTextfield("apiColorsMaxField")
+     .setPosition(labelX + spacing + buttonWidth + spacing + fieldWidth + spacing + ((smallFieldWidth + spacing) * 3), fieldY)
+     .setSize(smallFieldWidth, rowHeight)
+     .setText("0")
+     .setLabel("API MAX #COLORS\n0=NO MAX")
      .setAutoClear(false)
      .setColorCaptionLabel(color(255));
 
@@ -153,25 +171,25 @@ void setupUI() {
   int rightX = width - (buttonWidth * 4 + spacing * 5);
   
   cp5.addButton("resetAll")
-     .setPosition(rightX, fieldY)
+     .setPosition(rightX + spacing, fieldY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("RESET ALL")
      .setColorCaptionLabel(color(255));
   
   cp5.addButton("shuffleLines")
-     .setPosition(rightX + buttonWidth + spacing, fieldY)
+     .setPosition(rightX + spacing + buttonWidth + spacing, fieldY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("SHUFFLE LINES")
      .setColorCaptionLabel(color(255));
   
   cp5.addButton("shufflePatch")
-     .setPosition(rightX + (buttonWidth + spacing) * 2, fieldY)
+     .setPosition(rightX + spacing + (buttonWidth + spacing) * 2, fieldY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("SHUFFLE PATCH")
      .setColorCaptionLabel(color(255));
   
   cp5.addButton("shuffleColour")
-     .setPosition(rightX + (buttonWidth + spacing) * 3, fieldY)
+     .setPosition(rightX + spacing + (buttonWidth + spacing) * 3, fieldY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("SHUFFLE COLOUR")
      .setColorCaptionLabel(color(255));
@@ -179,25 +197,25 @@ void setupUI() {
   int secondRowY = fieldY + rowHeight + spacing;
   
   cp5.addButton("rapidGenToggle")
-     .setPosition(rightX, secondRowY)
+     .setPosition(rightX + spacing, secondRowY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("RAPID GEN")
      .setColorCaptionLabel(color(255));
   
   cp5.addButton("apiColors")
-     .setPosition(rightX + buttonWidth + spacing, secondRowY)
+     .setPosition(rightX + spacing + buttonWidth + spacing, secondRowY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("API COLORS")
      .setColorCaptionLabel(color(255));
   
   cp5.addButton("exportPNGButton")
-     .setPosition(rightX + (buttonWidth + spacing) * 2, secondRowY)
+     .setPosition(rightX + spacing + (buttonWidth + spacing) * 2, secondRowY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("EXPORT PNG")
      .setColorCaptionLabel(color(255));
   
   cp5.addButton("exportSVGButton")
-     .setPosition(rightX + (buttonWidth + spacing) * 3, secondRowY)
+     .setPosition(rightX + spacing + (buttonWidth + spacing) * 3, secondRowY)
      .setSize(buttonWidth, rowHeight)
      .setLabel("EXPORT SVG")
      .setColorCaptionLabel(color(255));

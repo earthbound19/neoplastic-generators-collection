@@ -10,6 +10,7 @@
 // - implement color palette retrieval, via button press, from a palette collection API: https://earthbound.io/api/palettes
 //   - with a text field for how many colors from the palette so use (subset, 0 = all colors, a number higher than available will
 //     auto-clamp to the total available)
+//   - with min and max color count fields that control the API query parameters (min= and max=)
 // - PNG and SVG export with full embedded (SVG) or txt sidecar (PNG) metadata of all creation paramaters (grammar, palette name etc.)
 // - line collision avoidance to prevent overlapping lines (lines may still cluster closely)
 // - redesign parameter UI with better contrast and for new features
@@ -83,7 +84,7 @@
 // a museum could just reboot the art on any extremely rare occassion it happens. Or for
 // all I know it was a cosmic ray flipping a bit.
 
-String scriptVersion = "2.16.2";
+String scriptVersion = "2.17.70";
 String scriptName = "Mondrian_Processing";
 String paletteSource = "custom_mondrian";
 String lastAPIPaletteName = "";
@@ -122,7 +123,7 @@ float furtherScaleFactor = 1;
 // Layout settings
 // An assumed real life "average" art width and height from surveying many Mondrian works is; 66.95cm x 62.97cm;
 // or 26.36in x	24.79x, which @ 72dpi is 1898px x	1785px; aspect w/h = 1.06 -- pretty much, he
-// liked squares, but there was variation -- AND from another survey (different image set) I got 
+// liked squares, but there was variation -- AND from another survey (different image set) I got
 // average 839 x 886 px; this hard-coded may proportionally scale down from that (aspect w/h = 0.9469) :
 int artWidth = 840;
 int artHeight = 886;
@@ -205,7 +206,8 @@ final color LINE_COLOR = #050506;
 color[] fullPalette;
 color[] activePalette;
 
-String apiURL = "https://earthbound.io/api/palettes/random?min=3";
+// Base API URL (min/max parameters will be appended dynamically)
+String apiBaseURL = "https://earthbound.io/api/palettes/random";
 
 // ArrayLists for dynamic arrays
 ArrayList<Integer> A_gr;
@@ -232,19 +234,19 @@ ArrayList<Integer> num;
 
 void settings() {
   pixelDensity(1);
-  
+
   canvasWidth = artWidth;
   canvasHeight = artHeight + uiPanelHeight;
 
   size(canvasWidth, canvasHeight, P2D);
-  
+
   // Disable global smoothing
   noSmooth();
 }
 
 void setup() {
   surface.setTitle(scriptName + " v" + scriptVersion);
-  
+
   // Initialize grammar generator; can pass any integer but counts will explode at higher numbers;
   // Generates grammars like A...B...C...D... with configurable max per letter; passing it 4 will
   // allow up to 4 repetition of A like AAAA, or B like BBBB, etc, or C or D:
@@ -252,18 +254,18 @@ void setup() {
   println("Grammar generator ready with " + grammarGenerator.getTotalCount() + " grammars");
 
   calculateLineWeight();
-  
+
   background(CANVAS_WHITE);
-  
+
   calculateGrid();
   minLineDistance = currentLineWeight * 2; // Minimum pixels between line centers
-  
+
   // Initialize ControlP5 UI FIRST so text fields exist for palette functions
   setupUI();
-  
+
   // Initialize with custom Mondrian palette (now safe - colorCountField exists)
   initCustomMondrianPalette();
-  
+
   // Update the color count field with actual palette size
   colorCountField.setText(str(fullPalette.length));
 
@@ -273,7 +275,7 @@ void setup() {
   if (rapidGrammarToggle != null) {
     rapidGrammarToggle.setValue(1);
     rapidGrammarToggle.setColorCaptionLabel(color(64));
-  }  
+  }
 
   crv();
   patch();
@@ -283,10 +285,13 @@ void setup() {
   // for all geometry, which would cause inconsistent line (black box)
   // width appearance:
   ((PGraphicsOpenGL)g).textureSampling(2);
-  
+
   println("Line weight: " + currentLineWeight + "px (scaled from " + artWidth + "px width)");
   println("Min line distance: " + minLineDistance + "px");
   println("Using custom Mondrian palette with " + fullPalette.length + " colors (white reserved for canvas)");
+  int apiMin = parseInt(apiColorsMinField.getText());
+  int apiMax = parseInt(apiColorsMaxField.getText());
+  println("API min colors: " + apiMin + (apiMin == 0 ? " (no minimum)" : "") + ", max colors: " + (apiMax == 0 ? "unlimited" : str(apiMax)));
 }
 
 // The setupUI() function could be here but it is in UI_Controls.pde in the same folder, auto-imported by Processing.
@@ -324,11 +329,68 @@ void percentField(String value) {
 void colorCountField(String value) {
   int limit = int(value);
   if (limit < 0) limit = 0;
-  if (fullPalette != null && limit > fullPalette.length) limit = fullPalette.length;
+  if (limit > fullPalette.length) limit = fullPalette.length;
   colorCountField.setText(str(limit));
   updateActivePalette();
   if (!rapidGenMode) {
     colour();
+  }
+}
+
+void apiColorsMinField(String value) {
+  int newMin = parseInt(value);
+
+  if (Float.isNaN(parseFloat(value))) {
+    return;
+  }
+
+  if (newMin < 0) {
+    newMin = 0;
+    println("API MIN: Negative value entered, setting to 0 (no minimum)");
+  }
+
+  int currentMax = parseInt(apiColorsMaxField.getText());
+
+  if (currentMax > 0 && newMin > currentMax) {
+    println("WARNING: API min (" + newMin + ") > max (" + currentMax + "). Setting max = min.");
+    errorLabel.setText("WARNING: API min > max, setting max = min");
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    apiColorsMaxField.setText(str(newMin));
+  }
+
+  apiColorsMinField.setText(str(newMin));
+  println("API min colors set to: " + (newMin == 0 ? "no minimum" : str(newMin)));
+}
+
+void apiColorsMaxField(String value) {
+  int newMax = parseInt(value);
+
+  if (Float.isNaN(parseFloat(value))) {
+    return;
+  }
+
+  if (newMax < 0) {
+    newMax = 0;
+    println("API MAX: Negative value entered, setting to 0 (no maximum)");
+  }
+
+  int currentMin = parseInt(apiColorsMinField.getText());
+
+  if (newMax > 0 && newMax < currentMin) {
+    println("WARNING: API max (" + newMax + ") < min (" + currentMin + "). Setting max = min.");
+    errorLabel.setText("WARNING: API max < min, setting max = min");
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    newMax = currentMin;
+  }
+
+  apiColorsMaxField.setText(str(newMax));
+
+  if (newMax == 0) {
+    println("API max colors set to: unlimited");
+  } else {
+    println("API max colors set to: " + newMax);
   }
 }
 
@@ -379,6 +441,12 @@ void resetAll() {
   grammarField.setText(grammar);
   percentToPatch = 0.33;
   percentField.setText("33");
+
+  // Reset API min/max fields to defaults (min=3, max=0)
+  apiColorsMinField.setText("3");
+  apiColorsMaxField.setText("0");
+  println("API min/max reset to: min=3, max=0 (unlimited)");
+
   initCustomMondrianPalette();
   colorCountField.setText(str(fullPalette.length));
   crv();
@@ -443,19 +511,19 @@ void shuffleGrammar() {
     // Get a random grammar from the generator
     String newGrammar = grammarGenerator.getRandomGrammar();
     println("SHUFFLE GRAMMAR: Generated: " + newGrammar);
-    
+
     if (!newGrammar.equals(grammar)) {
       grammar = newGrammar;
       println("SHUFFLE GRAMMAR: Applying: " + grammar);
-      
+
       // Update the text field display
       grammarField.setText(grammar);
-      
+
       // Regenerate the composition with the new grammar
       crv();
       patch();
       colour();
-      
+
       // No status message - grammar appears in main status line
     } else {
       println("SHUFFLE GRAMMAR: Random gave same grammar, trying again...");
@@ -509,6 +577,34 @@ void exportSVGButton() {
   exportToSVG();
 }
 
+String buildAPIURL() {
+  // Read current values directly from the text fields
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+
+  String url = apiBaseURL + "?";
+
+  // Handle exact match case (min == max && both > 0)
+  if (minVal > 0 && maxVal > 0 && minVal == maxVal) {
+    return url + "exact=" + minVal;
+  }
+
+  boolean hasParam = false;
+  if (minVal > 0) {
+    url += "min=" + minVal;
+    hasParam = true;
+  }
+
+  if (maxVal > 0) {
+    if (hasParam) url += "&";
+    url += "max=" + maxVal;
+    hasParam = true;
+  }
+
+  // If no parameters (both 0), return base URL without parameters
+  return hasParam ? url : apiBaseURL;
+}
+
 float scaleFactor = 1;
 void calculateLineWeight() {
   // Calculate proportional scaling additional factor; SEE COMMENTS AT adaptElementsToCanvasScale declaraction:
@@ -517,11 +613,11 @@ void calculateLineWeight() {
   }
   // A wasted calculation if further ScaleFactor = 1; but so would a conditional check sorta be:
   scaleFactor *= furtherScaleFactor;
-  
+
   // Calculate min and max for this canvas size
   float scaledMin = REFERENCE_MIN_WEIGHT * scaleFactor;
   float scaledMax = REFERENCE_MAX_WEIGHT * scaleFactor;
-  
+
   // Apply lower bound clamping to prevent lines from being too thin
   // Minimum practical line weight may be 3px
   final float ABSOLUTE_MIN_WEIGHT = 4;
@@ -532,13 +628,13 @@ void calculateLineWeight() {
       scaledMax = scaledMin + 2;
     }
   }
-  
+
   // Randomly select line weight between scaled min and max
   currentLineWeight = random(scaledMin, scaledMax);
-  
+
   // Round to nearest integer
   currentLineWeight = round(currentLineWeight);
-  
+
   if (currentLineWeight < 1) currentLineWeight = 1;
 }
 
@@ -554,11 +650,11 @@ void calculateGrid() {
     gridSizeY = gridSizeReference;
     gridSizeX = Math.round((float)artWidth / cellSize);
   }
-  
+
   // Ensure we have at least 2 divisions so lines can be placed
   if (gridSizeX < 2) gridSizeX = 2;
   if (gridSizeY < 2) gridSizeY = 2;
-  
+
   println("Canvas: " + artWidth + "x" + artHeight);
   println("Grid: " + gridSizeX + " x " + gridSizeY);
   println("Cell size: ~" + ((float)artWidth / gridSizeX) + "px x " + ((float)artHeight / gridSizeY) + "px");
@@ -623,7 +719,7 @@ void updateActivePalette() {
       indices.add(i);
     }
     Collections.shuffle(indices);
-    
+
     activePalette = new color[limit];
     for (int i = 0; i < limit; i++) {
       activePalette[i] = fullPalette[indices.get(i)];
@@ -633,36 +729,42 @@ void updateActivePalette() {
 }
 
 void fetchColorsFromAPI() {
-  println("Fetching colors from earthbound.io API...");
+  // Build URL with current min/max values
+  String apiURL = buildAPIURL();
+  println("Fetching colors from earthbound.io API with URL: " + apiURL);
+
   Thread t = new Thread(new Runnable() {
     public void run() {
       try {
         JSONObject json = loadJSONObject(apiURL);
         JSONArray colorArray = json.getJSONArray("colors");
-        
+
         // Extract metadata
         lastAPIPaletteName = json.getString("paletteName");
         lastAPIPaletteURL = json.getString("textSourceURL");
-        
+
         color[] newPalette = new color[colorArray.size()];
         for (int i = 0; i < colorArray.size(); i++) {
           String hexColor = colorArray.getString(i);
           newPalette[i] = unhex("FF" + hexColor.substring(1));
         }
-        
+
         fullPalette = new color[newPalette.length];
         for (int i = 0; i < newPalette.length; i++) {
           fullPalette[i] = newPalette[i];
         }
         paletteSource = "api";
-        
+
         // Update the color count field to show the full palette size
         colorCountField.setText(str(fullPalette.length));
         // and use the palette (including that fields' potentially changed number from the palette color count)
         updateActivePalette();
         // Signal that new palette is ready
         newPaletteReady = true;
-        
+
+        // Update status label with new palette name
+        statusLabel.setText(scriptName + " v" + scriptVersion + " | Line: " + nf(currentLineWeight, 0, 0) + "px" + (rapidGenMode ? " | RAPID GEN ACTIVE" : "") + " | Palette: " + lastAPIPaletteName);
+
         println("Successfully loaded " + fullPalette.length + " colors from API");
         println("Palette name: " + lastAPIPaletteName);
         println("Palette URL: " + lastAPIPaletteURL);
@@ -722,13 +824,13 @@ void crv() {
   y1 = new ArrayList<Integer>();
   x2 = new ArrayList<Integer>();
   y2 = new ArrayList<Integer>();
-  
+
   // First rectangle as canvas (0,0) to (gridSizeX, gridSizeY)
   x1.add(0);
   y1.add(0);
   x2.add(gridSizeX);
   y2.add(gridSizeY);
-  
+
   // Fill A_gr with values 1..gridSizeX-1 (possible vertical split positions)
   // Fill B_gr with values 1..gridSizeY-1 (possible horizontal split positions)
   for (int i = 1; i < gridSizeX; i++) {
@@ -737,7 +839,7 @@ void crv() {
   for (int i = 1; i < gridSizeY; i++) {
     B_gr.add(i);
   }
-  
+
   for (int charIdx = 0; charIdx < grammar.length(); charIdx++) {
     for (int f = 0; f < x1.size(); f++) {
       if (x1.get(f) > x2.get(f)) {
@@ -751,12 +853,12 @@ void crv() {
         y1.set(f, dum);
       }
     }
-    
+
     char c = grammar.charAt(charIdx);
     if (c == 'A') {
       // Add a vertical line with collision avoidance
       if (A_gr.size() == 0) continue;
-      
+
       // Find valid positions not too close to existing lines
       ArrayList<Integer> validPositions = new ArrayList<Integer>();
       for (int pos : A_gr) {
@@ -764,13 +866,13 @@ void crv() {
           validPositions.add(pos);
         }
       }
-      
+
       // If no valid positions, fall back to any position
       ArrayList<Integer> sourceList = validPositions.size() > 0 ? validPositions : A_gr;
       int r_a = (int)random(sourceList.size());
       int val = sourceList.get(r_a);
       A_add.add(val);
-      
+
       int rectCount = x1.size();
       for (int j = 0; j < rectCount; j++) {
         if (x1.get(j) < val && x2.get(j) > val) {
@@ -782,11 +884,11 @@ void crv() {
         }
       }
       A_gr.remove(Integer.valueOf(val));
-      
+
     } else if (c == 'B') {
       // Add a horizontal line with collision avoidance
       if (B_gr.size() == 0) continue;
-      
+
       // Find valid positions not too close to existing lines
       ArrayList<Integer> validPositions = new ArrayList<Integer>();
       for (int pos : B_gr) {
@@ -794,13 +896,13 @@ void crv() {
           validPositions.add(pos);
         }
       }
-      
+
       // If no valid positions, fall back to any position
       ArrayList<Integer> sourceList = validPositions.size() > 0 ? validPositions : B_gr;
       int r_b = (int)random(sourceList.size());
       int val = sourceList.get(r_b);
       B_add.add(val);
-      
+
       int rectCount = y1.size();
       for (int w = 0; w < rectCount; w++) {
         if (y1.get(w) < val && y2.get(w) > val) {
@@ -812,14 +914,14 @@ void crv() {
         }
       }
       B_gr.remove(Integer.valueOf(val));
-      
+
     } else if (c == 'C') {
       // Add a split vertical line
       if (A_gr.size() == 0) continue;
-      
+
       int r_c = (int)random(A_gr.size());
       int val = A_gr.get(r_c);
-      
+
       if (B_add.size() + D_add.size() == 0) {
         A_add.add(val);
         int rectCount = x1.size();
@@ -850,10 +952,10 @@ void crv() {
         int C_pick = (int)random(1, C_cont.size() - 1);
         C_st.add(C_cont.get(C_pick - 1));
         C_ed.add(C_cont.get(C_pick));
-        
+
         int rectCount = x1.size();
         for (int j = 0; j < rectCount; j++) {
-          if (x1.get(j) <= val && x2.get(j) >= val && 
+          if (x1.get(j) <= val && x2.get(j) >= val &&
               y1.get(j) >= C_cont.get(C_pick - 1) && y2.get(j) <= C_cont.get(C_pick)) {
             x1.add(val);
             y1.add(y1.get(j));
@@ -864,14 +966,14 @@ void crv() {
         }
         A_gr.remove(r_c);
       }
-      
+
     } else if (c == 'D') {
       // Add a split horizontal line
       if (B_gr.size() == 0) continue;
-      
+
       int r_d = (int)random(B_gr.size());
       int val = B_gr.get(r_d);
-      
+
       if (A_add.size() + C_add.size() == 0) {
         B_add.add(val);
         int rectCount = y1.size();
@@ -902,10 +1004,10 @@ void crv() {
         int D_pick = (int)random(1, D_cont.size() - 1);
         D_st.add(D_cont.get(D_pick - 1));
         D_ed.add(D_cont.get(D_pick));
-        
+
         int rectCount = y1.size();
         for (int w = 0; w < rectCount; w++) {
-          if (y1.get(w) <= val && y2.get(w) >= val && 
+          if (y1.get(w) <= val && y2.get(w) >= val &&
               x1.get(w) >= D_cont.get(D_pick - 1) && x2.get(w) <= D_cont.get(D_pick)) {
             x1.add(x1.get(w));
             y1.add(val);
@@ -924,13 +1026,13 @@ void patch() {
   num = new ArrayList<Integer>();
   for (int i = 0; i < x1.size(); i++) num.add(i);
   Collections.shuffle(num);
-  
+
   int q = (int)(x1.size() * percentToPatch);
   xs1 = new ArrayList<Integer>();
   ys1 = new ArrayList<Integer>();
   xs2 = new ArrayList<Integer>();
   ys2 = new ArrayList<Integer>();
-  
+
   for (int i = 0; i < q; i++) {
     int idx = num.get(i);
     xs1.add(x1.get(idx));
@@ -953,11 +1055,11 @@ void colour() {
 // Draw a rectangle representing a line segment
 void drawLineBox(float x1, float y1, float x2, float y2, float thickness) {
   float halfThick = thickness / 2.0f;
-  
+
   rectMode(CORNERS);
   noStroke();
   fill(LINE_COLOR);
-  
+
   if (abs(x1 - x2) < 0.1) {
     // Vertical box - force integer coordinates
     float centerX = round(x1);
@@ -979,41 +1081,41 @@ void drawArtwork() {
     rectMode(CORNERS);
     noStroke();
     int paletteIndex = rec_col.get(h);
-    if (activePalette != null && activePalette.length > 0) {
+    if (activePalette.length > 0) {
       fill(activePalette[paletteIndex % activePalette.length]);
     } else {
       fill(200);  // Fallback gray (should never happen)
     }
-    
+
     float rx1 = round(getX(xs1.get(h)));
     float ry1 = round(getY(ys1.get(h)));
     float rx2 = round(getX(xs2.get(h)));
     float ry2 = round(getY(ys2.get(h)));
     rect(rx1, ry1, rx2, ry2);
   }
-  
+
   // Draw grid lines as boxes
   fill(LINE_COLOR);
   noStroke();
   float halfThick = currentLineWeight / 2.0f;
-  
+
   for (int kk = 0; kk < A_add.size(); kk++) {
     float x = round(getX(A_add.get(kk)));
     rect(x - halfThick, 0, x + halfThick, artHeight);
   }
-  
+
   for (int kk = 0; kk < B_add.size(); kk++) {
     float y = round(getY(B_add.get(kk)));
     rect(0, y - halfThick, artWidth, y + halfThick);
   }
-  
+
   for (int kk = 0; kk < C_add.size(); kk++) {
     float x = round(getX(C_add.get(kk)));
     float y1 = round(getY(C_st.get(kk)));
     float y2 = round(getY(C_ed.get(kk)));
     rect(x - halfThick, y1, x + halfThick, y2);
   }
-  
+
   for (int kk = 0; kk < D_add.size(); kk++) {
     float x1 = round(getX(D_st.get(kk)));
     float x2 = round(getX(D_ed.get(kk)));
@@ -1024,7 +1126,7 @@ void drawArtwork() {
 
 boolean startRapidGenMode() {
   if (rapidGenMode) return false;
-  
+
   // Check if at least one sub-mode is active
   if (!rapidLines && !rapidPatch && !rapidColour && !rapidAPI && !rapidGrammar) {
     println("ERROR: Cannot start RAPID GEN mode - no sub-modes are active!");
@@ -1036,7 +1138,7 @@ boolean startRapidGenMode() {
     errorLabelHideTime = millis() + 6000;
     return false;
   }
-  
+
   rapidGenMode = true;
   rapidGenGenerating = false;
   rapidGenExportDelay = 0;
@@ -1062,41 +1164,41 @@ void stopRapidGenMode() {
 
 void generateRapidVariant() {
   boolean linesChanged = false;
-  
+
   // Randomize grammar if rapidGrammar is on
   if (rapidGrammar) {
     String newGrammar = grammarGenerator.getRandomGrammar();
     println("RAPID GRAMMAR: Generated: " + newGrammar);  // Print to stdout
-    
+
     if (!newGrammar.equals(grammar)) {
       grammar = newGrammar;
       println("RAPID GRAMMAR: Applying: " + grammar);  // Print to stdout
-      
+
       // Update the text field display
       grammarField.setText(grammar);
       // Force the text field to redraw
       grammarField.setColorBackground(color(64));
-      
+
       linesChanged = true;
     }
   }
-  
+
   if (rapidLines || linesChanged) {
     crv();  // Generates new line configuration and random line weight
     linesChanged = true;
   }
-  
+
   // If lines changed, we MUST also run patch() to update patch geometry,
   // regardless of rapidPatch setting. Otherwise patches from old grid
   // will be drawn on new grid lines.
   if (rapidPatch || linesChanged) {
     patch();  // Shuffle which patches are colored
   }
-  
+
   if (rapidColour) {
     colour();  // Shuffle colors assignment
   }
-  
+
   // API handling is separate and happens in draw()
 }
 
@@ -1110,7 +1212,7 @@ void draw() {
   // Now draw the white artwork background
   fill(CANVAS_WHITE);
   rect(0, 0, artWidth, artHeight);
-  
+
   // RAPID GEN state machine
   if (rapidGenMode) {
     // Check for pending API response if rapidAPI is on
@@ -1122,7 +1224,7 @@ void draw() {
         newPaletteReady = false;
       } else if (newPaletteReady) {
         // API call completed successfully (or failed but newPaletteReady flagged)
-        if (fullPalette != null && fullPalette.length > 0) {
+        if (fullPalette.length > 0) {
           updateActivePalette();
           colour();  // Recolor with new palette
           println("RAPID API: New palette applied (" + fullPalette.length + " colors)");
@@ -1137,7 +1239,7 @@ void draw() {
         // Don't return - let exports still happen
       }
     }
-    
+
     if (rapidGenExportDelay > 0) {
       rapidGenExportDelay--;
     } else if (rapidGenExportQueued) {
@@ -1150,7 +1252,7 @@ void draw() {
       // Start new generation
       rapidGenGenerating = true;
       println("--- RAPID GEN: Generating variant ---");
-      
+
       try {
         generateRapidVariant();
       } catch (IndexOutOfBoundsException e) {
@@ -1164,7 +1266,7 @@ void draw() {
         rapidGenExportDelay = 0;
         return;
       }
-      
+
       if (rapidAPI && !pendingAPICall) {
         if (!APIcallDelaySet) {
           APIcallDelaySet = true;
@@ -1185,16 +1287,16 @@ void draw() {
           }
         }
       }
-      
+
       rapidGenGenerating = false;
       rapidGenExportQueued = true;
       rapidGenExportDelay = 3;  // Wait 3 frames for rendering to stabilize
       println("--- RAPID GEN: Exports queued (will export in " + rapidGenExportDelay + " frames) ---");
     }
   }
-  
+
   drawArtwork();
-  
+
   // Process pending rapid gen export with paired naming
   if (pendingExportBaseName != null) {
     if (exportPNG) exportToPNG(pendingExportBaseName);
@@ -1227,14 +1329,14 @@ void exportToPNG() {
 // main PNG export function
 void exportToPNG(String baseName) {
   String filename = baseName + ".png";
-  
+
   // Force rendering to complete before capture
   loadPixels();
-  
+
   // Capture just the artwork area
   PImage artwork = get(0, 0, artWidth, artHeight);
   artwork.save(filename);
-  
+
   // Save metadata as .txt with same base name
   String metadataFile = baseName + ".txt";
   PrintWriter output = createWriter(metadataFile);
@@ -1254,6 +1356,9 @@ void exportToPNG(String baseName) {
   } else {
     output.println("Color palette source: " + paletteSource);
   }
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+  output.println("API query parameters - min: " + minVal + (minVal == 0 ? " (no minimum)" : "") + ", max: " + (maxVal == 0 ? "unlimited" : str(maxVal)));
   if (fullPalette != null) {
     output.println("Full palette size: " + fullPalette.length);
     output.println("Colors in full palette (excluding white):");
@@ -1276,9 +1381,9 @@ void exportToSVG() {
 // Main SVG export function
 void exportToSVG(String baseName) {
   String filename = baseName + ".svg";
-  
+
   PrintWriter output = createWriter(filename);
-  
+
   // Write SVG header - NO SCALING
   output.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
   output.println("<svg xmlns=\"http://www.w3.org/2000/svg\"");
@@ -1289,7 +1394,7 @@ void exportToSVG(String baseName) {
   output.println("     width=\"" + artWidth + "\"");
   output.println("     height=\"" + artHeight + "\"");
   output.println("     viewBox=\"0 0 " + artWidth + " " + artHeight + "\">");
-  
+
   // Add metadata using variables
   output.println("  <metadata>");
   output.println("    <rdf:RDF>");
@@ -1309,6 +1414,9 @@ void exportToSVG(String baseName) {
   } else {
     output.println("          Color palette source: " + paletteSource);
   }
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+  output.println("          API query parameters - min: " + minVal + (minVal == 0 ? " (no minimum)" : "") + ", max: " + (maxVal == 0 ? "unlimited" : str(maxVal)));
   if (fullPalette != null) {
     output.println("          Full palette size: " + fullPalette.length);
     output.println("          Colors in full palette (excluding white):");
@@ -1323,41 +1431,41 @@ void exportToSVG(String baseName) {
   output.println("      </cc:Work>");
   output.println("    </rdf:RDF>");
   output.println("  </metadata>");
-  
+
   // Draw canvas background using variable
   output.println("  <rect x=\"0\" y=\"0\" width=\"" + artWidth + "\" height=\"" + artHeight + "\" fill=\"#" + hex(CANVAS_WHITE, 6) + "\"/>");
-  
+
   // Draw all colored rectangles
   for (int h = 0; h < xs1.size(); h++) {
     float x = getX(xs1.get(h));
     float y = getY(ys1.get(h));
     float w = getX(xs2.get(h)) - x;
     float hgt = getY(ys2.get(h)) - y;
-    
+
     int paletteIndex = rec_col.get(h);
     color c = activePalette[paletteIndex % activePalette.length];
-    
-    output.println("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + w + "\" height=\"" + hgt + 
+
+    output.println("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + w + "\" height=\"" + hgt +
                    "\" fill=\"#" + hex(c, 6) + "\" stroke=\"none\"/>");
   }
-  
+
   // Draw all grid lines as RECTANGLES using color from variable
   output.println("  <g fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\">");
-  
+
   float halfThick = currentLineWeight / 2.0f;
-  
+
   // Full vertical lines (boxes)
   for (int kk = 0; kk < A_add.size(); kk++) {
     float x = getX(A_add.get(kk));
     output.println("    <rect x=\"" + (x - halfThick) + "\" y=\"0\" width=\"" + currentLineWeight + "\" height=\"" + artHeight + "\"/>");
   }
-  
+
   // Full horizontal lines (boxes)
   for (int kk = 0; kk < B_add.size(); kk++) {
     float y = getY(B_add.get(kk));
     output.println("    <rect x=\"0\" y=\"" + (y - halfThick) + "\" width=\"" + artWidth + "\" height=\"" + currentLineWeight + "\"/>");
   }
-  
+
   // Segmented vertical lines (boxes)
   for (int kk = 0; kk < C_add.size(); kk++) {
     float x = getX(C_add.get(kk));
@@ -1365,7 +1473,7 @@ void exportToSVG(String baseName) {
     float y2 = getY(C_ed.get(kk));
     output.println("    <rect x=\"" + (x - halfThick) + "\" y=\"" + y1 + "\" width=\"" + currentLineWeight + "\" height=\"" + (y2 - y1) + "\"/>");
   }
-  
+
   // Segmented horizontal lines (boxes)
   for (int kk = 0; kk < D_add.size(); kk++) {
     float x1 = getX(D_st.get(kk));
@@ -1373,12 +1481,12 @@ void exportToSVG(String baseName) {
     float y = getY(D_add.get(kk));
     output.println("    <rect x=\"" + x1 + "\" y=\"" + (y - halfThick) + "\" width=\"" + (x2 - x1) + "\" height=\"" + currentLineWeight + "\"/>");
   }
-  
+
   output.println("  </g>");
   output.println("</svg>");
   output.flush();
   output.close();
-  
+
   println("Saved SVG: " + filename);
 }
 
