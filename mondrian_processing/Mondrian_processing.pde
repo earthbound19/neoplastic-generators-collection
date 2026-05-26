@@ -564,6 +564,24 @@ void rapidGenToggle() {
 
 void apiColors() {
   resetStatusMessage();
+  
+  // Validate min/max before API call
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+  
+  // If min > max, set min = max and show warning
+  if (minVal > 0 && maxVal > 0 && minVal > maxVal) {
+    String errMsg = "WARNING: API min (" + minVal + ") > max (" + maxVal + "). Setting min = max (" + maxVal + ")";
+    println(errMsg);
+    errorLabel.setText(errMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    
+    // Set min equal to max
+    apiColorsMinField.setText(str(maxVal));
+    minVal = maxVal;
+  }
+  
   fetchColorsFromAPI();
 }
 
@@ -762,8 +780,11 @@ void fetchColorsFromAPI() {
         // Signal that new palette is ready
         newPaletteReady = true;
 
-        // Update status label with new palette name
-        statusLabel.setText(scriptName + " v" + scriptVersion + " | Line: " + nf(currentLineWeight, 0, 0) + "px" + (rapidGenMode ? " | RAPID GEN ACTIVE" : "") + " | Palette: " + lastAPIPaletteName);
+        // Update status label with new palette name - proper ControlP5 clear
+        String labelString = scriptName + " v" + scriptVersion + " | Line: " + nf(currentLineWeight, 0, 0) + "px" + (rapidGenMode ? " | RAPID GEN ACTIVE" : "") + " | Palette: " + lastAPIPaletteName;
+        statusLabel.get().setText("");  // Clear the internal label
+        statusLabel.setText(labelString);
+        statusLabel.get().show();  // Force redraw
 
         println("Successfully loaded " + fullPalette.length + " colors from API");
         println("Palette name: " + lastAPIPaletteName);
@@ -803,11 +824,11 @@ void crv() {
   } else {
     paletteString = " | Palette: Built-in Mondrian";
   }
-  // hacky: make the remainder of the status label a blank string, to clear otherwise not clearing text as the function draws "nothing" to text background:
-  int maxLength = 200;
+  // Proper ControlP5 label clear
   String labelString = scriptName + " v" + scriptVersion + " | Line: " + nf(currentLineWeight, 0, 0) + "px" + (rapidGenMode ? " | RAPID GEN ACTIVE" : "") + paletteString;
-  labelString = String.format("%-" + maxLength + "s", labelString);
+  statusLabel.get().setText("");  // Clear the internal label
   statusLabel.setText(labelString);
+  statusLabel.get().show();  // Force redraw
   minLineDistance = currentLineWeight * 2;
 
   A_gr = new ArrayList<Integer>();
