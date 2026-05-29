@@ -2,20 +2,48 @@
 // Ported from p5js (OpenProcessing sketch 381152) by Queen Bee Art to desktop Processing: https://www.openprocessing.org/sketch/381152/
 // From information metadata at source: (Piet) Mondrian compositions computed using shape grammar. 'A' adds vertical lines,
 // 'B' adds horizontal lines, 'C' adds split vertical lines, and 'D' adds split horizontal lines. The text field controls the
-// number of patches that are coloured. Play around with the buttons to get different compositions.
+// number of patches that are coloured. For more information see DEPENDENCIES and USAGE below. For information on features
+// added after the initial port, see ADDITIONAL FEATURES, below.
+//
+// DEPENDENCIES
+// - Processing (possibly only v4 or higher)
+// - controlP5 LIBRARY. From the Processing IDE: Tools menu > Manage Tools.. > Libraries tab > type controlp5 in the
+//   search field > click the library in the search result > click install, wait for download and install to complete.
+//
+// LICENSE
+// Creative Commons Share-Alike Attribution, by Richard Alexander Hall, May 2026, ported from code by another developer,
+// as noted under DESCRIPTION.
+//
+// USAGE
+// - double click to open the sketch in the Processing IDE, or open it in any IDE etc. that can run Processing
+// - run the sketch
+// - click on the GRAMMAR STRING text box to edit line construction grammar (any combination of the letters
+//   A, B, C, and D, repetition allowed). OR click the SHUFFLE GRAMMER button to get a new random grammar
+// - edit other parameters in text areas to your wishes also, and toy with the various buttons
+// - press ENTER in any field where you have edited the values to generate a new or tweaked composition based on that setting
+// - use the RAPID LINES, RAPID PATCH, etc. buttons to control which elements change per generation
+// - press S to save PNG and/or SVG (see booleans at top). Click PNG/SVG buttons to export (buttons override booleans)
+// - click "RAPID GEN" to enter generation mode. The text "RAPID GEN" on the button will change to "STOP." Press "STOP" to exit
+// RAPID GEN mode. In RAPID GEN mode, the sketch generates and saves endless variations with the current grammar etc. settings.
+// RAPID API mode toggled on with a press of that button retrieves a new palette from an API and uses it with new variants.
+//
+// NOTES
+// There are global variables that can alter properties and behavior not modifiable via the UI (buttons etc). They include the
+// artwork dimensions, behavior modes, and the base palette. (That may be all of them.) Look for them early in the functional
+// code below, and alter them and re-run the sketch to see the changes they put in effect.
 //
 // ADDITIONAL FEATURES
-// Features have been added since that base port:
+// Features have been added since the base port:
 // - update to dynamic grid system that keeps grid division (resultant cells) roughly (or exactly) square for any canvas aspect ratio
-// - implement color palette retrieval, via button press, from a palette collection API: https://earthbound.io/api/palettes
+// - implement color palette retrieval, via button press, from a palette collection API
 //   - with a text field for how many colors from the palette so use (subset, 0 = all colors, a number higher than available will
 //     auto-clamp to the total available)
-//   - with min and max color count fields that control the API query parameters (min= and max=)
+//   - with min and max color count fields that control the API query parameters (min= and max=), min 0 = no minimum, max 0 = no maximum
 // - PNG and SVG export with full embedded (SVG) or txt sidecar (PNG) metadata of all creation paramaters (grammar, palette name etc.)
 // - line collision avoidance to prevent overlapping lines (lines may still cluster closely)
 // - redesign parameter UI with better contrast and for new features
 // - custom Mondrian palette with colors I reckon he used in his neoplastic paintings
-// - dynamic line weight scaling based on canvas width (proportional to 1022px reference)
+// - dynamic line weight scaling based on canvas width (proportional to a reference canvas size)
 // - random line weight per sketch run between scaled minimum and maximum
 // - option to randomize line construction grammar
 // - RAPID GEN mode: infinite, rapid generation of variants (frame-based state machine, no background threading)
@@ -23,68 +51,24 @@
 // - RAPID GEN sub-modes: control random lines, patches, colours, API retrieval from a collection, and grid grammar per variant
 //   - with hard-coded delay between palette retrievals to allow render and / or export of many variants per palette
 //
-// ===============================================================
-// REQUIRED: controlP5 LIBRARY; see:
-// ===============================================================
-// DEPENDENCIES
-// Processing (possibly only v4 or higher), with the controlP5 library installed. From the Processing IDE:
-// Tools menu > Manage Tools.. > Libraries tab > type controlp5 in the search field > click the library in the search
-// result > click install, wait for download and install to complete. Possibly restart the Processing IDE thereafter.
-//
-// USAGE
-// Double click to open the sketch in the Processing IDE, or otherwise open it in anything else that can run Processing.
-// Run the sketch. Click on the GRAMMAR STRING text box to edit line construction grammar (any combination of the letters A, B, C, and D,
-// repetition allowed). Edit other parameters in text areas to your wishes also.
-// Press ENTER in any field where you have edited the values to generate a new composition based on that grammar.
-// Press S to save PNG and/or SVG (see booleans at top). Click PNG/SVG buttons to export (buttons override booleans).
-// Click "RAPID GEN" to enter generation mode. The text "RAPID GEN" on the button will change to "STOP." Press "STOP" to exit
-// RAPID GEN mode. In RAPID GEN mode, the sketch generates and saves endless variations with the current grammar etc. settings.
-// Use the RAPID LINES, RAPID PATCH, etc. buttons to control which elements change per generation. RAPID API retrieves
-// a new palette from an API and uses it with new variants.
-//
-// LICENSE
-// Creative Commons Share-Alike Attribution, by Richard Alexander Hall, May 2026, ported from another developer,
-// as noted under DESCRIPTION.
-//
 //
 // CODE
 // TO DO
-// - make a global basefile name with random string append before script version, which is set ONCE before PNG and / or SVG export; to:
-//  - avoid clobbers of files exported in the same microsecond (it could happen? -- as the file name only captures seconds)
-//  - ensure PNG and SVGs are unambiguosly paired via basename in the case of some second overlap during export
-// - print errors to UI errorlabel in these cases:
-//  - API fetch failures
-//  - Invalid grammar entered (though the filter already handles this)
-//  - Attempting to start RAPID GEN with no sub-modes active
 // - museum mode: only display artwork area, fullscreen, no UI controls, with RAPID API (new palettes) etc. active
 //   for every new render, then doing the render when ready.
 // - in museum mode, every 7th iteration use default Mondrian palette as throwback?
+// - retrieve random pallete via API by fuzzy match (would need API update)
 // - CLI mode accepting a JSON config and dynamically patching settings
 //   - to start any mode thereby also?
 //   - to override globals like dimensions
-//   - to override palette, specifying the config as "source" in written metadata
+//   - to override palette, specifying the config as "source" in written metadata:
+//    - retrieve via API
+//    - OR retrieve random palette from local repository - perhaps only by name (no local database of palettes by color count)
 // - rare line behind other lines which is a color from the palette and not black?? re: https://www.wikiart.org/en/piet-mondrian/composition-with-red-yellow-and-blue-1942
 //  - how? simply delete or never render the black lines around them? I think they may be fills, not lines. also at: https://www.wikiart.org/en/piet-mondrian/composition-no-10-1942
-// BACKLOG; apparently not a critical / recurrent issue: fix this crash:
-// I ran it in rapidgen mode and encountered a crash:
-// --- RAPID GEN: Generating variant ---
-// GrammarGenerator: Selected grammar #254: AAAABBBBCCCCDDD
-// RAPID GRAMMAR: Generated: AAAABBBBCCCCDDD
-// RAPID GRAMMAR: Applying: AAAABBBBCCCCDDD
-// DEBUG: crv() called with grammar = AAAABBBBCCCCDDD
-// --- RAPID GEN: Exports queued (will export in 3 frames) ---
-// IndexOutOfBoundsException: Index 15 out of bounds for length 15
-// IndexOutOfBoundsException: Index 15 out of bounds for length 15
-//
-// I hope it's easy to figure out the cause. I note that the generated grammar has 15
-// characters and the error is out of bounds for length 15. I've added a crash handling
-// try / catch block for a crash scenario that may catch that in rapid gen mode, and ran
-// it in rapid gen mode for hours and nothing ever crashed, even reducing the grammar to
-// 4 characters for a long stretch either. It's ephemeral and probably rare enough that
-// a museum could just reboot the art on any extremely rare occassion it happens. Or for
-// all I know it was a cosmic ray flipping a bit.
 
-String scriptVersion = "2.17.70";
+
+String scriptVersion = "2.18.24";
 String scriptName = "Mondrian_Processing";
 String paletteSource = "custom_mondrian";
 String lastAPIPaletteName = "";
@@ -143,7 +127,7 @@ final float REFERENCE_MIN_WEIGHT = 22;
 final float REFERENCE_MAX_WEIGHT = 68;
 
 float currentLineWeight;  // Will be set randomly on each run
-float minLineDistance;    // Minimum distance between lines (currentLineWeight * 2)
+float minLineDistance;    // Minimum distance between lines
 
 // Calculated dimensions
 int canvasWidth;
@@ -172,7 +156,7 @@ boolean pendingAPICall = false;
 int apiCallStartTime = 0;
 int APImillisElapsed = 0;
 boolean newPaletteReady = false;
-final int API_TIMEOUT_MS = 12000;  // 12 seconds timeout
+final int API_TIMEOUT_MS = 9200;  // timout in milliseconds
 boolean APIcallDelaySet = false;   // tells whether a delay has been set to call the color retreival API
 final int API_DELAY_BETWEEN_CALLS = 9650;   // time in ms (1000ms = 1s) between new API calls
 
@@ -206,7 +190,7 @@ final color LINE_COLOR = #050506;
 color[] fullPalette;
 color[] activePalette;
 
-// Base API URL (min/max parameters will be appended dynamically)
+// Base API URL (min / max etc. parameters will be appended dynamically)
 String apiBaseURL = "https://earthbound.io/api/palettes/random";
 
 // ArrayLists for dynamic arrays
@@ -253,6 +237,10 @@ void setup() {
   grammarGenerator = new GrammarGenerator(maxLetterRepetitionForGrammarGenerator);
   println("Grammar generator ready with " + grammarGenerator.getTotalCount() + " grammars");
 
+  // Randomize initial grammar
+  grammar = grammarGenerator.getRandomGrammar();
+  println("Initial random grammar: " + grammar);
+
   calculateLineWeight();
 
   background(CANVAS_WHITE);
@@ -262,6 +250,9 @@ void setup() {
 
   // Initialize ControlP5 UI FIRST so text fields exist for palette functions
   setupUI();
+
+  // Update grammar field to show the random grammar
+  grammarField.setText(grammar);
 
   // Initialize with custom Mondrian palette (now safe - colorCountField exists)
   initCustomMondrianPalette();
@@ -299,12 +290,45 @@ void setup() {
 void grammarField(String value) {
   // Filter to only A,B,C,D
   String cleaned = "";
+  String invalidChars = "";
   for (int i = 0; i < value.length(); i++) {
     char c = Character.toUpperCase(value.charAt(i));
     if (c == 'A' || c == 'B' || c == 'C' || c == 'D') {
       cleaned += c;
+    } else if (c != 'A' && c != 'B' && c != 'C' && c != 'D' && c != ' ') {
+      // Track invalid characters (ignore spaces)
+      if (invalidChars.indexOf(c) == -1) {
+        invalidChars += c;
+      }
     }
   }
+  
+  // Check if any invalid characters were removed
+  if (cleaned.length() != value.length() && value.length() > 0) {
+    String invalidMsg = "WARNING: Invalid characters removed: " + invalidChars + " (use only A,B,C,D)";
+    println(invalidMsg);
+    errorLabel.setText(invalidMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+  } else {
+    // Clear error if no invalid chars
+    errorLabel.setText("");
+    errorLabel.setVisible(false);
+    errorLabelHideTime = 0;
+  }
+  
+  // Check if grammar is empty after cleaning
+  if (cleaned.length() == 0) {
+    String emptyMsg = "ERROR: Grammar cannot be empty! Keeping previous grammar: " + grammar;
+    println(emptyMsg);
+    errorLabel.setText(emptyMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    // Restore the previous grammar to the text field
+    grammarField.setText(grammar);
+    return;  // Don't update grammar
+  }
+  
   if (cleaned.length() > 0) {
     grammar = cleaned;
     grammarField.setText(grammar);
@@ -509,37 +533,16 @@ void shuffleGrammar() {
   resetStatusMessage();
   if (!rapidGenMode) {
     // Get a random grammar from the generator
-    String newGrammar = grammarGenerator.getRandomGrammar();
-    println("SHUFFLE GRAMMAR: Generated: " + newGrammar);
+    grammar = grammarGenerator.getRandomGrammar();
+    println("SHUFFLE GRAMMAR: Applying: " + grammar);
+    grammarField.setText(grammar);
 
-    if (!newGrammar.equals(grammar)) {
-      grammar = newGrammar;
-      println("SHUFFLE GRAMMAR: Applying: " + grammar);
-
-      // Update the text field display
-      grammarField.setText(grammar);
-
-      // Regenerate the composition with the new grammar
-      crv();
-      patch();
-      colour();
-
-      // No status message - grammar appears in main status line
-    } else {
-      println("SHUFFLE GRAMMAR: Random gave same grammar, trying again...");
-      // Try one more time with a different grammar
-      newGrammar = grammarGenerator.getRandomGrammar();
-      if (!newGrammar.equals(grammar)) {
-        grammar = newGrammar;
-        println("SHUFFLE GRAMMAR: Applying on second try: " + grammar);
-        grammarField.setText(grammar);
-        crv();
-        patch();
-        colour();
-      } else {
-        println("SHUFFLE GRAMMAR: Same grammar twice - keeping current");
-      }
-    }
+    // snipped from here and the immediately above code adapted:
+    // previously here a large language model assumed that if it randomly
+    // generated the same grammar as before we should try again. But that's
+    // not an edge case I care about; repeating the grammar is acceptable.
+    // if we get the same grammar that's fine, so just above we immediately
+    // use whatever.
   } else {
     println("Can't shuffle grammar while RAPID GEN active");
     errorLabel.setText("ERROR: Stop RAPID GEN first");
@@ -749,7 +752,7 @@ void updateActivePalette() {
 void fetchColorsFromAPI() {
   // Build URL with current min/max values
   String apiURL = buildAPIURL();
-  println("Fetching colors from earthbound.io API with URL: " + apiURL);
+  println("Fetching colors from API " + apiURL + " ...");
 
   Thread t = new Thread(new Runnable() {
     public void run() {
@@ -780,37 +783,45 @@ void fetchColorsFromAPI() {
         // Signal that new palette is ready
         newPaletteReady = true;
 
-        // Update status label with new palette name - proper ControlP5 clear
+        // Update status label with new palette name
         String labelString = scriptName + " v" + scriptVersion + " | Line: " + nf(currentLineWeight, 0, 0) + "px" + (rapidGenMode ? " | RAPID GEN ACTIVE" : "") + " | Palette: " + lastAPIPaletteName;
-        statusLabel.get().setText("");  // Clear the internal label
+        statusLabel.get().setText("");
         statusLabel.setText(labelString);
-        statusLabel.get().show();  // Force redraw
+        statusLabel.get().show();
 
         println("Successfully loaded " + fullPalette.length + " colors from API");
         println("Palette name: " + lastAPIPaletteName);
         println("Palette URL: " + lastAPIPaletteURL);
+        
+        // Clear any previous error message on success
+        errorLabel.setText("");
+        errorLabel.setVisible(false);
+        errorLabelHideTime = 0;
+        
       } catch (Exception e) {
         println("API fetch failed: " + e.getMessage());
-        errorLabel.setText("ERROR: API fetch failed");
+        String errorMsg = "ERROR: API fetch failed - " + e.getMessage();
+        errorLabel.setText(errorMsg);
         errorLabel.setVisible(true);
         errorLabelHideTime = millis() + 6000;
         // On failure, signal that call is done but no new palette
         newPaletteReady = true;
+        // Keep existing palette, don't modify fullPalette
       }
     }
   });
   t.start();
 }
 
-// String randomString(int length) {
-//   String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-//   String result = "";
-//   for (int i = 0; i < length; i++) {
-//     int index = (int)random(chars.length());
-//     result += chars.charAt(index);
-//   }
-//   return result;
-// }
+String randomString(int length) {
+  String chars = "bcdkmnpqrstvwyzBCDKMNPQRSTVWYZ78";
+  String result = "";
+  for (int i = 0; i < length; i++) {
+    int index = (int)random(chars.length());
+    result += chars.charAt(index);
+  }
+  return result;
+}
 
 void crv() {
   // println("DEBUG: crv() called with grammar = " + grammar);
@@ -1065,9 +1076,13 @@ void patch() {
 
 void colour() {
   rec_col = new ArrayList<Integer>();
-  if (activePalette == null || activePalette.length == 0) {
+  if (fullPalette == null || fullPalette.length == 0) {
     initCustomMondrianPalette();
   }
+  
+  // Refresh the active palette every time to get a fresh random subset
+  updateActivePalette();
+  
   for (int i = 0; i < x1.size(); i++) {
     rec_col.add((int)random(activePalette.length));
   }
@@ -1151,10 +1166,11 @@ boolean startRapidGenMode() {
   // Check if at least one sub-mode is active
   if (!rapidLines && !rapidPatch && !rapidColour && !rapidAPI && !rapidGrammar) {
     println("ERROR: Cannot start RAPID GEN mode - no sub-modes are active!");
-    println("  Enable at least one of: Rapid Lines, Rapid Patch, Rapid Colour, or Rapid API");
-    println("  Rapid Grammar: " + (rapidGrammar ? "ON" : "OFF"));
-    statusMessage = "ERROR: Enable at least one RAPID mode (Lines, Patch, Colour, or API)";
-    errorLabel.setText(statusMessage);
+    println("  Enable at least one of: Rapid Lines, Rapid Patch, Rapid Colour, Rapid API, or Rapid Grammar");
+    
+    String errorMsg = "ERROR: Enable at least one RAPID mode (Lines, Patch, Colour, API, Grammar)";
+    statusMessage = errorMsg;
+    errorLabel.setText(errorMsg);
     errorLabel.setVisible(true);
     errorLabelHideTime = millis() + 6000;
     return false;
@@ -1170,6 +1186,12 @@ boolean startRapidGenMode() {
   println("  Rapid Colour: " + (rapidColour ? "ON" : "OFF"));
   println("  Rapid API: " + (rapidAPI ? "ON" : "OFF"));
   println("  Rapid Grammar: " + (rapidGrammar ? "ON" : "OFF"));
+  
+  // Clear error on successful start
+  errorLabel.setText("");
+  errorLabel.setVisible(false);
+  errorLabelHideTime = 0;
+  
   return true;
 }
 
@@ -1334,10 +1356,11 @@ void draw() {
 
 String getTimestamp() {
   Calendar cal = Calendar.getInstance();
-  return String.format("%04d_%02d_%02d_%02d_%02d_%02d__%04d",
+  String rnd_chars_for_timestamp_end = randomString(6);
+  return String.format("%04d_%02d_%02d_%02d_%02d_%02d__%04d_%s",
     cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH),
     cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND),
-    cal.get(Calendar.MILLISECOND)
+    cal.get(Calendar.MILLISECOND), rnd_chars_for_timestamp_end
   );
 }
 
