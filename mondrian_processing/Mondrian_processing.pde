@@ -2,54 +2,79 @@
 // Ported from p5js (OpenProcessing sketch 381152) by Queen Bee Art to desktop Processing: https://www.openprocessing.org/sketch/381152/
 // From information metadata at source: (Piet) Mondrian compositions computed using shape grammar. 'A' adds vertical lines,
 // 'B' adds horizontal lines, 'C' adds split vertical lines, and 'D' adds split horizontal lines. The text field controls the
-// number of patches that are coloured. Play around with the buttons to get different compositions.
-//
-// ADDITIONAL FEATURES
-// Features have been added since that base port:
-// - update to dynamic grid system that keeps grid division (resultant cells) roughly (or exactly) square for any canvas aspect ratio
-// - implement color palette retrieval from a palette collection API: https://earthbound.io/data/random_ebPalette/ -- via button press
-//   - with color subset selection with color count text field (0 = all colors)
-// - add PNG and SVG export with full metadata (grammar, grid, palette name / URL)
-// - add line collision avoidance to prevent overlapping/clustered lines
-// - redesign UI with buttons for new features and better contrast
-// - custom Mondrian palette with colors I reckon he used in his neoplastic paintings
-// - dynamic line weight scaling based on canvas width (proportional to 1022px reference)
-// - random line weight per sketch run (integer between scaled min/max)
-// - make many mode: infinite generation of variants with auto-save (frame-based state machine, no background threading)
+// number of patches that are coloured. For more information see DEPENDENCIES and USAGE below. For information on features
+// added after the initial port, see ADDITIONAL FEATURES, below.
 //
 // DEPENDENCIES
-// Processing
-//
-// USAGE
-// Double click to open the sketch in the Processing IDE, or otherwise open it in anything else that can run processing.
-// Run the sketch. Click on the rule text box to edit rules (type A/B/C/D). Click on percent box to edit percentage.
-// Press ENTER to generate a new composition based on the rule string.
-// Press S to save PNG and/or SVG (see booleans at top). Click PNG/SVG buttons to export (buttons override booleans).
-// Click "MAKE MANY" to enter generation mode (button toggles to STOP). In MAKE MANY mode, the sketch generates
-// and saves endless variations (new random curves + line weights) with the current grammar and color settings.
-// Click STOP (which the MAKE MANY button changes to when that mode is active) to halt generation.
+// - Processing (possibly only v4 or higher)
+// - controlP5 LIBRARY. From the Processing IDE: Tools menu > Manage Tools.. > Libraries tab > type controlp5 in the
+//   search field > click the library in the search result > click install, wait for download and install to complete.
 //
 // LICENSE
-// Creative Commons Share-Alike Attribution, by Richard Alexander Hall - 2026-05-12, ported from another developer,
+// Creative Commons Share-Alike Attribution, by Richard Alexander Hall, May 2026, ported from code by another developer,
 // as noted under DESCRIPTION.
+//
+// USAGE
+// - double click to open the sketch in the Processing IDE, or open it in any IDE etc. that can run Processing
+// - run the sketch
+// - click on the GRAMMAR STRING text box to edit line construction grammar (any combination of the letters
+//   A, B, C, and D, repetition allowed). OR click the SHUFFLE GRAMMER button to get a new random grammar
+// - edit other parameters in text areas to your wishes also, and toy with the various buttons
+// - press ENTER in any field where you have edited the values to generate a new or tweaked composition based on that setting
+// - use the RAPID LINES, RAPID PATCH, etc. buttons to control which elements change per generation
+// - press S to save PNG and/or SVG (see booleans at top). Click PNG/SVG buttons to export (buttons override booleans)
+// - click "RAPID GEN" to enter generation mode. The text "RAPID GEN" on the button will change to "STOP." Press "STOP" to exit
+// RAPID GEN mode. In RAPID GEN mode, the sketch generates and saves endless variations with the current grammar etc. settings.
+// RAPID API mode toggled on with a press of that button retrieves a new palette from an API and uses it with new variants.
+//
+// NOTES
+// There are global variables that can alter properties and behavior not modifiable via the UI (buttons etc). They include the
+// artwork dimensions, behavior modes, and the base palette. (That may be all of them.) Look for them early in the functional
+// code below, and alter them and re-run the sketch to see the changes they put in effect.
+//
+// ADDITIONAL FEATURES
+// Features have been added since the base port:
+// - update to dynamic grid system that keeps grid division (resultant cells) roughly (or exactly) square for any canvas aspect ratio
+// - implement color palette retrieval, via button press, from a palette collection API
+//   - with a text field for how many colors from the palette so use (subset, 0 = all colors, a number higher than available will
+//     auto-clamp to the total available)
+//   - with min and max color count fields that control the API query parameters (min= and max=), min 0 = no minimum, max 0 = no maximum
+// - PNG and SVG export with full embedded (SVG) or txt sidecar (PNG) metadata of all creation paramaters (grammar, palette name etc.)
+// - line collision avoidance to prevent overlapping lines (lines may still cluster closely)
+// - redesign parameter UI with better contrast and for new features
+// - custom Mondrian palette with colors I reckon he used in his neoplastic paintings
+// - dynamic line weight scaling based on canvas width (proportional to a reference canvas size)
+// - random line weight per sketch run between scaled minimum and maximum
+// - option to randomize line construction grammar
+// - RAPID GEN mode: infinite, rapid generation of variants (frame-based state machine, no background threading)
+//   - auto-save of variants to PNG and / or SVG controlle by global booleans that can be hacked (exportPNG, exportSVG)
+// - RAPID GEN sub-modes: control random lines, patches, colours, API retrieval from a collection, and grid grammar per variant
+//   - with hard-coded delay between palette retrievals to allow render and / or export of many variants per palette
 //
 //
 // CODE
 // TO DO
-// - museum mode; only display artwork area, fullscreen, no UI controls, getting a new palette in the background
+// - museum mode: only display artwork area, fullscreen, no UI controls, with RAPID API (new palettes) etc. active
 //   for every new render, then doing the render when ready.
-// - in museum mode, every 7th iteration use Mondrian palette as throwback?
-// - rapid creation mode (many renders and PNG + SVG saves up to N renders)
+// - in museum mode, every 7th iteration use default Mondrian palette as throwback?
+// - retrieve random pallete via API by fuzzy match (would need API update)
 // - CLI mode accepting a JSON config and dynamically patching settings
 //   - to start any mode thereby also?
 //   - to override globals like dimensions
-//   - to override palette, specifying the config as "source" in written metadata
+//   - to override palette, specifying the config as "source" in written metadata:
+//    - retrieve via API
+//    - OR retrieve random palette from local repository - perhaps only by name (no local database of palettes by color count)
+// - rare line behind other lines which is a color from the palette and not black?? re: https://www.wikiart.org/en/piet-mondrian/composition-with-red-yellow-and-blue-1942
+//  - how? simply delete or never render the black lines around them? I think they may be fills, not lines. also at: https://www.wikiart.org/en/piet-mondrian/composition-no-10-1942
 
-String scriptVersion = "2.4.21";
+
+String scriptVersion = "2.18.24";
 String scriptName = "Mondrian_Processing";
 String paletteSource = "custom_mondrian";
 String lastAPIPaletteName = "";
 String lastAPIPaletteURL = "";
+String paletteString = "";
+int errorLabelHideTime = 0;
 
 import processing.svg.*;
 import java.util.Collections;
@@ -59,23 +84,50 @@ import java.util.Calendar;
 boolean exportPNG = true;
 boolean exportSVG = true;
 
-// Layout settings
-// An assumed "average" art width and height from surveying many Mondrian works is; 1022 x 1092: this hard-coded
-// proportionally scales down from that to 720px high:
-int artWidth = 842;
-int artHeight = 900;
-int gridSizeReference = 32;  // Reference grid size for the shorter dimension
-int uiPanelHeight = 135; // Height of the UI panel at bottom
+// if the adaptElementsToCanvasScale is true, no matter what size you make the canvas, the Mondrian-esque
+// lines (and resulting related area fills) will scale up or down so that the proportions or
+// wight of lines are typical of his paintings at any scale; for a larger or smaller canvas
+// it will effectively be a blown up or miniaturized Mondrian painting. If the following is false,
+// lines will remain at "life size" no matter how large or small the canvas, and for example
+// with a much larger canvas it will be filled with more work detail if the lines grammar allows.
+// Whereas a smaller canvas will be more filled with "real" scale lines. You can think of
+// adaptElementsToCanvasScale = true as meaning "Extend canvas mode;" a larger canvas will keep "real life"
+// line weights but distribute lines over a wider area, and make more of them if you enter
+// a more complex line grammar. Hard-coded default true:
+boolean adaptElementsToCanvasScale = true;
+// furtherScaleFactor is an additional percent calculation after the hard-coded scale calculation
+// to make the line weight heaver or lighter after that. To make lines heavier, set furtherScaleFactor
+// higher than 1, e.g. 1.2 will makes lines 120% of default scale; it is a percent as decimal
+// multiplier. Or set it to a decimal lower than 1 to make a lighter than default line weight.
+// The hard-coded default 1.
+// NOTE: in either and all cases, an absolute minimum line weight is enforced that overrides anything
+// deemed too light; see the ABSOLUTE_MIN_WEIGHT variable declaration:
+float furtherScaleFactor = 1;
 
-// Line weight configuration - PROPORTIONAL SCALING
-// Reference dimensions: max canvas width = 1022px
-// At 1022px width: min line weight = 6px, max line weight = 32px
-final float REFERENCE_WIDTH = 1022;
-final float REFERENCE_MIN_WEIGHT = 6;
-final float REFERENCE_MAX_WEIGHT = 32;
+// Layout settings
+// An assumed real life "average" art width and height from surveying many Mondrian works is; 66.95cm x 62.97cm;
+// or 26.36in x	24.79x, which @ 72dpi is 1898px x	1785px; aspect w/h = 1.06 -- pretty much, he
+// liked squares, but there was variation -- AND from another survey (different image set) I got
+// average 839 x 886 px; this hard-coded may proportionally scale down from that (aspect w/h = 0.9469) :
+int artWidth = 840;
+int artHeight = 886;
+int uiPanelHeight = 120;  // Height reserved for UI controls below artwork
+int gridSizeReference = 28;  // Reference grid size for the shorter dimension; orig. 32 and hard-coded may differ
+
+// - line weight notes:
+//  - piet-mondriaan-1930-mondrian-composition-ii-in-red-blue-and-yellow.jpg resized to real life dimension (72dpi @ cm size match) ; ref width 2438; line match at weight 68
+//  - Composition_A_by_Piet_Mondrian_Galleria_Nazionale_d'Arte_Moderna_e_Contemporanea.jpg resized to real life dimension (72dpi @ cm size match) ; ref width 2594; line match at weight 22
+// FROM THAT ^ : Line weight configuration - PROPORTIONAL SCALING
+// Reference dimensions: max canvas width = 2438px
+// - At 2438px width:
+//  - minimum line weight matching Mondrian neoplastic paintings real-world size is: 22px
+//  - maximum line weight matching Mondrian neoplastic paintings real-world size is: 68px
+final float REFERENCE_WIDTH = 2438;
+final float REFERENCE_MIN_WEIGHT = 22;
+final float REFERENCE_MAX_WEIGHT = 68;
 
 float currentLineWeight;  // Will be set randomly on each run
-float minLineDistance;    // Minimum distance between lines (currentLineWeight * 2)
+float minLineDistance;    // Minimum distance between lines
 
 // Calculated dimensions
 int canvasWidth;
@@ -83,28 +135,38 @@ int canvasHeight;
 int gridSizeX;           // Number of horizontal divisions
 int gridSizeY;           // Number of vertical divisions
 
-String rule = "AABBCCDDDDDD";
-String ruleInput = rule;
-float keep = 0.5;
-String percentText = "50";
-String colorCountText = "0";
+String grammar = "AAAABBBBCCCCDDD";
+// see comments at grammarGenerator initialization and in GrammarGenerator.pde:
+int maxLetterRepetitionForGrammarGenerator = 4;
+float percentToPatch = 0.33;
 
-// Text input focus
-boolean focusRule = true;
-boolean focusPercent = false;
-boolean focusColorCount = false;
-int cursorBlinkTime;
-boolean cursorVisible;
+// RAPID GEN mode - frame-based state machine (no background thread)
+boolean rapidGenMode = false;
+boolean rapidGenGenerating = false;
+int rapidGenExportDelay = 0;
+boolean rapidGenExportQueued = false;
 
-// MAKE MANY mode - frame-based state machine (no background thread)
-boolean makeManyMode = false;
-boolean makeManyGenerating = false;
-int makeManyExportDelay = 0;
-boolean makeManyExportQueued = false;
+// RAPID GEN sub-modes
+boolean rapidLines = true;    // Shuffle lines with every new variant (default ON)
+boolean rapidPatch = true;    // Shuffle patches with every new variant (default ON)
+boolean rapidColour = true;   // Shuffle colours with every new variant (default ON)
+boolean rapidAPI = false;     // Fetch new palette for every variant (default OFF)
+boolean rapidGrammar = false;  // Randomize grammar (types and combinations of lines) for every variant (default OFF)
+boolean pendingAPICall = false;
+int apiCallStartTime = 0;
+int APImillisElapsed = 0;
+boolean newPaletteReady = false;
+final int API_TIMEOUT_MS = 9200;  // timout in milliseconds
+boolean APIcallDelaySet = false;   // tells whether a delay has been set to call the color retreival API
+final int API_DELAY_BETWEEN_CALLS = 9650;   // time in ms (1000ms = 1s) between new API calls
 
-// Export flags for frame-synchronized capture
-boolean pendingExportPNG = false;
-boolean pendingExportSVG = false;
+String pendingExportBaseName = null;  // for paired rapid gen PNG and SVG exports
+
+String statusMessage = "";
+int statusMessageTimer = 0;
+
+// We can do this because of the tab or import of the code file GrammarGenerator.pde, in the same directory:
+GrammarGenerator grammarGenerator;
 
 // CUSTOM MONDRIAN PALETTE (inspired by color analysis of original works)
 // NOTE: #f6f6f6 (white) is EXCLUDED from this palette - it's reserved for canvas background only!
@@ -128,7 +190,8 @@ final color LINE_COLOR = #050506;
 color[] fullPalette;
 color[] activePalette;
 
-String apiURL = "https://earthbound.io/data/random_ebPalette/";
+// Base API URL (min / max etc. parameters will be appended dynamically)
+String apiBaseURL = "https://earthbound.io/api/palettes/random";
 
 // ArrayLists for dynamic arrays
 ArrayList<Integer> A_gr;
@@ -152,66 +215,433 @@ ArrayList<Integer> ys2;
 ArrayList<Integer> rec_col;
 ArrayList<Integer> num;
 
+
 void settings() {
   pixelDensity(1);
-  
+
   canvasWidth = artWidth;
   canvasHeight = artHeight + uiPanelHeight;
-  
+
   size(canvasWidth, canvasHeight, P2D);
-  
+
   // Disable global smoothing
   noSmooth();
 }
 
 void setup() {
   surface.setTitle(scriptName + " v" + scriptVersion);
-  
-  // Calculate line weight based on current canvas width
+
+  // Initialize grammar generator; can pass any integer but counts will explode at higher numbers;
+  // Generates grammars like A...B...C...D... with configurable max per letter; passing it 4 will
+  // allow up to 4 repetition of A like AAAA, or B like BBBB, etc, or C or D:
+  grammarGenerator = new GrammarGenerator(maxLetterRepetitionForGrammarGenerator);
+  println("Grammar generator ready with " + grammarGenerator.getTotalCount() + " grammars");
+
+  // Randomize initial grammar
+  grammar = grammarGenerator.getRandomGrammar();
+  println("Initial random grammar: " + grammar);
+
   calculateLineWeight();
-  
+
   background(CANVAS_WHITE);
-  
-  // Calculate dynamic grid based on canvas proportions
+
   calculateGrid();
   minLineDistance = currentLineWeight * 2; // Minimum pixels between line centers
-  
-  // Initialize with custom Mondrian palette
+
+  // Initialize ControlP5 UI FIRST so text fields exist for palette functions
+  setupUI();
+
+  // Update grammar field to show the random grammar
+  grammarField.setText(grammar);
+
+  // Initialize with custom Mondrian palette (now safe - colorCountField exists)
   initCustomMondrianPalette();
-  
-  cursorBlinkTime = millis();
-  cursorVisible = true;
-  focusRule = true;
-  focusPercent = false;
-  focusColorCount = false;
-  
+
+  // Update the color count field with actual palette size
+  colorCountField.setText(str(fullPalette.length));
+
+  // Enable grammar rapid gen mode by default
+  rapidGrammar = true;
+  // Update the toggle UI to reflect the enabled state
+  if (rapidGrammarToggle != null) {
+    rapidGrammarToggle.setValue(1);
+    rapidGrammarToggle.setColorCaptionLabel(color(64));
+  }
+
   crv();
   patch();
-  updateActivePalette();
   colour();
 
-  // CRITICAL FIX: Force nearest-neighbor sampling
-  // This completely disables anti-aliasing for
-  // all geometry, which was causing inconsistent
-  // line (black box) width appearance:
+  // Force nearest-neighbor sampling, which disables anti-aliasing
+  // for all geometry, which would cause inconsistent line (black box)
+  // width appearance:
   ((PGraphicsOpenGL)g).textureSampling(2);
-  
+
   println("Line weight: " + currentLineWeight + "px (scaled from " + artWidth + "px width)");
   println("Min line distance: " + minLineDistance + "px");
   println("Using custom Mondrian palette with " + fullPalette.length + " colors (white reserved for canvas)");
+  int apiMin = parseInt(apiColorsMinField.getText());
+  int apiMax = parseInt(apiColorsMaxField.getText());
+  println("API min colors: " + apiMin + (apiMin == 0 ? " (no minimum)" : "") + ", max colors: " + (apiMax == 0 ? "unlimited" : str(apiMax)));
 }
 
-void calculateLineWeight() {
-  // Calculate proportional scaling factor based on actual artWidth
-  float scaleFactor = artWidth / REFERENCE_WIDTH;
+// The setupUI() function could be here but it is in UI_Controls.pde in the same folder, auto-imported by Processing.
+
+void grammarField(String value) {
+  // Filter to only A,B,C,D
+  String cleaned = "";
+  String invalidChars = "";
+  for (int i = 0; i < value.length(); i++) {
+    char c = Character.toUpperCase(value.charAt(i));
+    if (c == 'A' || c == 'B' || c == 'C' || c == 'D') {
+      cleaned += c;
+    } else if (c != 'A' && c != 'B' && c != 'C' && c != 'D' && c != ' ') {
+      // Track invalid characters (ignore spaces)
+      if (invalidChars.indexOf(c) == -1) {
+        invalidChars += c;
+      }
+    }
+  }
   
+  // Check if any invalid characters were removed
+  if (cleaned.length() != value.length() && value.length() > 0) {
+    String invalidMsg = "WARNING: Invalid characters removed: " + invalidChars + " (use only A,B,C,D)";
+    println(invalidMsg);
+    errorLabel.setText(invalidMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+  } else {
+    // Clear error if no invalid chars
+    errorLabel.setText("");
+    errorLabel.setVisible(false);
+    errorLabelHideTime = 0;
+  }
+  
+  // Check if grammar is empty after cleaning
+  if (cleaned.length() == 0) {
+    String emptyMsg = "ERROR: Grammar cannot be empty! Keeping previous grammar: " + grammar;
+    println(emptyMsg);
+    errorLabel.setText(emptyMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    // Restore the previous grammar to the text field
+    grammarField.setText(grammar);
+    return;  // Don't update grammar
+  }
+  
+  if (cleaned.length() > 0) {
+    grammar = cleaned;
+    grammarField.setText(grammar);
+    if (!rapidGenMode) {
+      crv();
+      patch();
+      colour();
+    }
+  }
+}
+
+void percentField(String value) {
+  int percent = int(value);
+  if (percent >= 0 && percent <= 100) {
+    percentToPatch = percent / 100.0;
+    if (!rapidGenMode) {
+      patch();
+    }
+  }
+}
+
+void colorCountField(String value) {
+  int limit = int(value);
+  if (limit < 0) limit = 0;
+  if (limit > fullPalette.length) limit = fullPalette.length;
+  colorCountField.setText(str(limit));
+  updateActivePalette();
+  if (!rapidGenMode) {
+    colour();
+  }
+}
+
+void apiColorsMinField(String value) {
+  int newMin = parseInt(value);
+
+  if (Float.isNaN(parseFloat(value))) {
+    return;
+  }
+
+  if (newMin < 0) {
+    newMin = 0;
+    println("API MIN: Negative value entered, setting to 0 (no minimum)");
+  }
+
+  int currentMax = parseInt(apiColorsMaxField.getText());
+
+  if (currentMax > 0 && newMin > currentMax) {
+    println("WARNING: API min (" + newMin + ") > max (" + currentMax + "). Setting max = min.");
+    errorLabel.setText("WARNING: API min > max, setting max = min");
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    apiColorsMaxField.setText(str(newMin));
+  }
+
+  apiColorsMinField.setText(str(newMin));
+  println("API min colors set to: " + (newMin == 0 ? "no minimum" : str(newMin)));
+}
+
+void apiColorsMaxField(String value) {
+  int newMax = parseInt(value);
+
+  if (Float.isNaN(parseFloat(value))) {
+    return;
+  }
+
+  if (newMax < 0) {
+    newMax = 0;
+    println("API MAX: Negative value entered, setting to 0 (no maximum)");
+  }
+
+  int currentMin = parseInt(apiColorsMinField.getText());
+
+  if (newMax > 0 && newMax < currentMin) {
+    println("WARNING: API max (" + newMax + ") < min (" + currentMin + "). Setting max = min.");
+    errorLabel.setText("WARNING: API max < min, setting max = min");
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    newMax = currentMin;
+  }
+
+  apiColorsMaxField.setText(str(newMax));
+
+  if (newMax == 0) {
+    println("API max colors set to: unlimited");
+  } else {
+    println("API max colors set to: " + newMax);
+  }
+}
+
+// Reset status message
+void resetStatusMessage() {
+  statusMessage = "";
+  statusMessageTimer = 0;
+}
+
+// Toggle event handlers with text color inversion
+void rapidLinesToggle(boolean value) {
+  resetStatusMessage();
+  rapidLines = value;
+  if (value) {
+    rapidLinesToggle.setColorCaptionLabel(color(64));   // Dark text when ON (white button)
+  } else {
+    rapidLinesToggle.setColorCaptionLabel(color(255));  // White text when OFF (dark button)
+  }
+  println("Rapid Lines: " + (rapidLines ? "ON" : "OFF"));
+}
+
+void rapidPatchToggle(boolean value) {
+  resetStatusMessage();
+  rapidPatch = value;
+  if (value) {
+    rapidPatchToggle.setColorCaptionLabel(color(64));
+  } else {
+    rapidPatchToggle.setColorCaptionLabel(color(255));
+  }
+  println("Rapid Patch: " + (rapidPatch ? "ON" : "OFF"));
+}
+
+void rapidColourToggle(boolean value) {
+  resetStatusMessage();
+  rapidColour = value;
+  if (value) {
+    rapidColourToggle.setColorCaptionLabel(color(64));
+  } else {
+    rapidColourToggle.setColorCaptionLabel(color(255));
+  }
+  println("Rapid Colour: " + (rapidColour ? "ON" : "OFF"));
+}
+
+void resetAll() {
+  resetStatusMessage();
+  if (rapidGenMode) stopRapidGenMode();
+  grammar = "AABBCCDDDDDD";
+  grammarField.setText(grammar);
+  percentToPatch = 0.33;
+  percentField.setText("33");
+
+  // Reset API min/max fields to defaults (min=3, max=0)
+  apiColorsMinField.setText("3");
+  apiColorsMaxField.setText("0");
+  println("API min/max reset to: min=3, max=0 (unlimited)");
+
+  initCustomMondrianPalette();
+  colorCountField.setText(str(fullPalette.length));
+  crv();
+  patch();
+  colour();
+}
+
+void rapidAPIToggle(boolean value) {
+  resetStatusMessage();
+  rapidAPI = value;
+  if (value) {
+    rapidAPIToggle.setColorCaptionLabel(color(64));
+  } else {
+    rapidAPIToggle.setColorCaptionLabel(color(255));
+  }
+  println("Rapid API: " + (rapidAPI ? "ON" : "OFF"));
+}
+
+void rapidGrammarToggle(boolean value) {
+  resetStatusMessage();
+  rapidGrammar = value;
+  if (value) {
+    rapidGrammarToggle.setColorCaptionLabel(color(64));
+  } else {
+    rapidGrammarToggle.setColorCaptionLabel(color(255));
+  }
+  println("Rapid Grammar: " + (rapidGrammar ? "ON" : "OFF"));
+}
+
+// Button event handlers
+void shuffleLines() {
+  resetStatusMessage();
+  if (!rapidGenMode) {
+    crv();
+    patch();
+  } else {
+    println("Can't shuffle while RAPID GEN active");
+  }
+}
+
+void shufflePatch() {
+  resetStatusMessage();
+  if (!rapidGenMode) {
+    patch();
+  } else {
+    println("Can't shuffle while RAPID GEN active");
+  }
+}
+
+void shuffleColour() {
+  resetStatusMessage();
+  if (!rapidGenMode) {
+    colour();
+  } else {
+    println("Can't shuffle while RAPID GEN active");
+  }
+}
+
+void shuffleGrammar() {
+  resetStatusMessage();
+  if (!rapidGenMode) {
+    // Get a random grammar from the generator
+    grammar = grammarGenerator.getRandomGrammar();
+    println("SHUFFLE GRAMMAR: Applying: " + grammar);
+    grammarField.setText(grammar);
+
+    // snipped from here and the immediately above code adapted:
+    // previously here a large language model assumed that if it randomly
+    // generated the same grammar as before we should try again. But that's
+    // not an edge case I care about; repeating the grammar is acceptable.
+    // if we get the same grammar that's fine, so just above we immediately
+    // use whatever.
+  } else {
+    println("Can't shuffle grammar while RAPID GEN active");
+    errorLabel.setText("ERROR: Stop RAPID GEN first");
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 6000;
+  }
+}
+
+void rapidGenToggle() {
+  resetStatusMessage();
+  if (rapidGenMode) {
+    stopRapidGenMode();
+    cp5.get(Button.class, "rapidGenToggle").setLabel("RAPID GEN");
+  } else {
+    boolean started = startRapidGenMode();
+    if (started) {
+      cp5.get(Button.class, "rapidGenToggle").setLabel("STOP");
+    }
+    // If start failed, button label stays "RAPID GEN"
+  }
+}
+
+void apiColors() {
+  resetStatusMessage();
+  
+  // Validate min/max before API call
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+  
+  // If min > max, set min = max and show warning
+  if (minVal > 0 && maxVal > 0 && minVal > maxVal) {
+    String errMsg = "WARNING: API min (" + minVal + ") > max (" + maxVal + "). Setting min = max (" + maxVal + ")";
+    println(errMsg);
+    errorLabel.setText(errMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 4000;
+    
+    // Set min equal to max
+    apiColorsMinField.setText(str(maxVal));
+    minVal = maxVal;
+  }
+  
+  fetchColorsFromAPI();
+}
+
+void exportPNGButton() {
+  resetStatusMessage();
+  exportToPNG();
+}
+
+void exportSVGButton() {
+  resetStatusMessage();
+  exportToSVG();
+}
+
+String buildAPIURL() {
+  // Read current values directly from the text fields
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+
+  String url = apiBaseURL + "?";
+
+  // Handle exact match case (min == max && both > 0)
+  if (minVal > 0 && maxVal > 0 && minVal == maxVal) {
+    return url + "exact=" + minVal;
+  }
+
+  boolean hasParam = false;
+  if (minVal > 0) {
+    url += "min=" + minVal;
+    hasParam = true;
+  }
+
+  if (maxVal > 0) {
+    if (hasParam) url += "&";
+    url += "max=" + maxVal;
+    hasParam = true;
+  }
+
+  // If no parameters (both 0), return base URL without parameters
+  return hasParam ? url : apiBaseURL;
+}
+
+float scaleFactor = 1;
+void calculateLineWeight() {
+  // Calculate proportional scaling additional factor; SEE COMMENTS AT adaptElementsToCanvasScale declaraction:
+  if (adaptElementsToCanvasScale == true) {
+    scaleFactor = artWidth / REFERENCE_WIDTH;
+  }
+  // A wasted calculation if further ScaleFactor = 1; but so would a conditional check sorta be:
+  scaleFactor *= furtherScaleFactor;
+
   // Calculate min and max for this canvas size
   float scaledMin = REFERENCE_MIN_WEIGHT * scaleFactor;
   float scaledMax = REFERENCE_MAX_WEIGHT * scaleFactor;
-  
+
   // Apply lower bound clamping to prevent lines from being too thin
-  // Minimum practical line weight is 3px (anything smaller loses visual impact)
-  final float ABSOLUTE_MIN_WEIGHT = 3.0;
+  // Minimum practical line weight may be 3px
+  final float ABSOLUTE_MIN_WEIGHT = 4;
   if (scaledMin < ABSOLUTE_MIN_WEIGHT) {
     scaledMin = ABSOLUTE_MIN_WEIGHT;
     // Adjust max proportionally if min was clamped
@@ -219,13 +649,13 @@ void calculateLineWeight() {
       scaledMax = scaledMin + 2;
     }
   }
-  
+
   // Randomly select line weight between scaled min and max
   currentLineWeight = random(scaledMin, scaledMax);
-  
+
   // Round to nearest integer
   currentLineWeight = round(currentLineWeight);
-  
+
   if (currentLineWeight < 1) currentLineWeight = 1;
 }
 
@@ -241,11 +671,11 @@ void calculateGrid() {
     gridSizeY = gridSizeReference;
     gridSizeX = Math.round((float)artWidth / cellSize);
   }
-  
+
   // Ensure we have at least 2 divisions so lines can be placed
   if (gridSizeX < 2) gridSizeX = 2;
   if (gridSizeY < 2) gridSizeY = 2;
-  
+
   println("Canvas: " + artWidth + "x" + artHeight);
   println("Grid: " + gridSizeX + " x " + gridSizeY);
   println("Cell size: ~" + ((float)artWidth / gridSizeX) + "px x " + ((float)artHeight / gridSizeY) + "px");
@@ -291,13 +721,13 @@ void initCustomMondrianPalette() {
   paletteSource = "custom_mondrian";
   lastAPIPaletteName = "";
   lastAPIPaletteURL = "";
-  colorCountText = str(fullPalette.length);
   updateActivePalette();
   println("Using custom Mondrian palette with " + fullPalette.length + " colors");
 }
 
 void updateActivePalette() {
-  int limit = int(colorCountText);
+  // Get limit from the text field, not from activePalette (which may be null)
+  int limit = int(colorCountField.getText());
   if (limit <= 0 || limit >= fullPalette.length) {
     activePalette = new color[fullPalette.length];
     for (int i = 0; i < fullPalette.length; i++) {
@@ -310,7 +740,7 @@ void updateActivePalette() {
       indices.add(i);
     }
     Collections.shuffle(indices);
-    
+
     activePalette = new color[limit];
     for (int i = 0; i < limit; i++) {
       activePalette[i] = fullPalette[indices.get(i)];
@@ -320,48 +750,96 @@ void updateActivePalette() {
 }
 
 void fetchColorsFromAPI() {
-  println("Fetching colors from earthbound.io API...");
+  // Build URL with current min/max values
+  String apiURL = buildAPIURL();
+  println("Fetching colors from API " + apiURL + " ...");
+
   Thread t = new Thread(new Runnable() {
     public void run() {
       try {
         JSONObject json = loadJSONObject(apiURL);
         JSONArray colorArray = json.getJSONArray("colors");
-        
+
         // Extract metadata
         lastAPIPaletteName = json.getString("paletteName");
         lastAPIPaletteURL = json.getString("textSourceURL");
-        
+
         color[] newPalette = new color[colorArray.size()];
         for (int i = 0; i < colorArray.size(); i++) {
           String hexColor = colorArray.getString(i);
           newPalette[i] = unhex("FF" + hexColor.substring(1));
         }
-        
+
         fullPalette = new color[newPalette.length];
         for (int i = 0; i < newPalette.length; i++) {
           fullPalette[i] = newPalette[i];
         }
         paletteSource = "api";
-        colorCountText = str(fullPalette.length);
+
+        // Update the color count field to show the full palette size
+        colorCountField.setText(str(fullPalette.length));
+        // and use the palette (including that fields' potentially changed number from the palette color count)
         updateActivePalette();
-        colour();
-        
+        // Signal that new palette is ready
+        newPaletteReady = true;
+
+        // Update status label with new palette name
+        String labelString = scriptName + " v" + scriptVersion + " | Line: " + nf(currentLineWeight, 0, 0) + "px" + (rapidGenMode ? " | RAPID GEN ACTIVE" : "") + " | Palette: " + lastAPIPaletteName;
+        statusLabel.get().setText("");
+        statusLabel.setText(labelString);
+        statusLabel.get().show();
+
         println("Successfully loaded " + fullPalette.length + " colors from API");
         println("Palette name: " + lastAPIPaletteName);
         println("Palette URL: " + lastAPIPaletteURL);
+        
+        // Clear any previous error message on success
+        errorLabel.setText("");
+        errorLabel.setVisible(false);
+        errorLabelHideTime = 0;
+        
       } catch (Exception e) {
         println("API fetch failed: " + e.getMessage());
-        lastAPIPaletteName = "";
-        lastAPIPaletteURL = "";
+        String errorMsg = "ERROR: API fetch failed - " + e.getMessage();
+        errorLabel.setText(errorMsg);
+        errorLabel.setVisible(true);
+        errorLabelHideTime = millis() + 6000;
+        // On failure, signal that call is done but no new palette
+        newPaletteReady = true;
+        // Keep existing palette, don't modify fullPalette
       }
     }
   });
   t.start();
 }
 
+String randomString(int length) {
+  String chars = "bcdkmnpqrstvwyzBCDKMNPQRSTVWYZ78";
+  String result = "";
+  for (int i = 0; i < length; i++) {
+    int index = (int)random(chars.length());
+    result += chars.charAt(index);
+  }
+  return result;
+}
+
 void crv() {
+  // println("DEBUG: crv() called with grammar = " + grammar);
+
   // Re-randomize line weight for this new composition
   calculateLineWeight();
+  if (paletteSource.equals("api") && lastAPIPaletteName.length() > 0) {
+    paletteString = " | Palette: " + lastAPIPaletteName;
+  } else if (paletteSource.equals("api") && pendingAPICall) {
+    paletteString = " | Fetching palette...";
+  } else {
+    paletteString = " | Palette: Built-in Mondrian";
+  }
+  // Proper ControlP5 label clear
+  String labelString = scriptName + " v" + scriptVersion + " | Line: " + nf(currentLineWeight, 0, 0) + "px" + (rapidGenMode ? " | RAPID GEN ACTIVE" : "") + paletteString;
+  statusLabel.get().setText("");  // Clear the internal label
+  statusLabel.setText(labelString);
+  statusLabel.get().show();  // Force redraw
   minLineDistance = currentLineWeight * 2;
 
   A_gr = new ArrayList<Integer>();
@@ -378,13 +856,13 @@ void crv() {
   y1 = new ArrayList<Integer>();
   x2 = new ArrayList<Integer>();
   y2 = new ArrayList<Integer>();
-  
+
   // First rectangle as canvas (0,0) to (gridSizeX, gridSizeY)
   x1.add(0);
   y1.add(0);
   x2.add(gridSizeX);
   y2.add(gridSizeY);
-  
+
   // Fill A_gr with values 1..gridSizeX-1 (possible vertical split positions)
   // Fill B_gr with values 1..gridSizeY-1 (possible horizontal split positions)
   for (int i = 1; i < gridSizeX; i++) {
@@ -393,8 +871,8 @@ void crv() {
   for (int i = 1; i < gridSizeY; i++) {
     B_gr.add(i);
   }
-  
-  for (int charIdx = 0; charIdx < rule.length(); charIdx++) {
+
+  for (int charIdx = 0; charIdx < grammar.length(); charIdx++) {
     for (int f = 0; f < x1.size(); f++) {
       if (x1.get(f) > x2.get(f)) {
         int dum = x2.get(f);
@@ -407,12 +885,12 @@ void crv() {
         y1.set(f, dum);
       }
     }
-    
-    char c = rule.charAt(charIdx);
+
+    char c = grammar.charAt(charIdx);
     if (c == 'A') {
       // Add a vertical line with collision avoidance
       if (A_gr.size() == 0) continue;
-      
+
       // Find valid positions not too close to existing lines
       ArrayList<Integer> validPositions = new ArrayList<Integer>();
       for (int pos : A_gr) {
@@ -420,13 +898,13 @@ void crv() {
           validPositions.add(pos);
         }
       }
-      
+
       // If no valid positions, fall back to any position
       ArrayList<Integer> sourceList = validPositions.size() > 0 ? validPositions : A_gr;
       int r_a = (int)random(sourceList.size());
       int val = sourceList.get(r_a);
       A_add.add(val);
-      
+
       int rectCount = x1.size();
       for (int j = 0; j < rectCount; j++) {
         if (x1.get(j) < val && x2.get(j) > val) {
@@ -438,11 +916,11 @@ void crv() {
         }
       }
       A_gr.remove(Integer.valueOf(val));
-      
+
     } else if (c == 'B') {
       // Add a horizontal line with collision avoidance
       if (B_gr.size() == 0) continue;
-      
+
       // Find valid positions not too close to existing lines
       ArrayList<Integer> validPositions = new ArrayList<Integer>();
       for (int pos : B_gr) {
@@ -450,13 +928,13 @@ void crv() {
           validPositions.add(pos);
         }
       }
-      
+
       // If no valid positions, fall back to any position
       ArrayList<Integer> sourceList = validPositions.size() > 0 ? validPositions : B_gr;
       int r_b = (int)random(sourceList.size());
       int val = sourceList.get(r_b);
       B_add.add(val);
-      
+
       int rectCount = y1.size();
       for (int w = 0; w < rectCount; w++) {
         if (y1.get(w) < val && y2.get(w) > val) {
@@ -468,14 +946,14 @@ void crv() {
         }
       }
       B_gr.remove(Integer.valueOf(val));
-      
+
     } else if (c == 'C') {
       // Add a split vertical line
       if (A_gr.size() == 0) continue;
-      
+
       int r_c = (int)random(A_gr.size());
       int val = A_gr.get(r_c);
-      
+
       if (B_add.size() + D_add.size() == 0) {
         A_add.add(val);
         int rectCount = x1.size();
@@ -506,10 +984,10 @@ void crv() {
         int C_pick = (int)random(1, C_cont.size() - 1);
         C_st.add(C_cont.get(C_pick - 1));
         C_ed.add(C_cont.get(C_pick));
-        
+
         int rectCount = x1.size();
         for (int j = 0; j < rectCount; j++) {
-          if (x1.get(j) <= val && x2.get(j) >= val && 
+          if (x1.get(j) <= val && x2.get(j) >= val &&
               y1.get(j) >= C_cont.get(C_pick - 1) && y2.get(j) <= C_cont.get(C_pick)) {
             x1.add(val);
             y1.add(y1.get(j));
@@ -520,14 +998,14 @@ void crv() {
         }
         A_gr.remove(r_c);
       }
-      
+
     } else if (c == 'D') {
       // Add a split horizontal line
       if (B_gr.size() == 0) continue;
-      
+
       int r_d = (int)random(B_gr.size());
       int val = B_gr.get(r_d);
-      
+
       if (A_add.size() + C_add.size() == 0) {
         B_add.add(val);
         int rectCount = y1.size();
@@ -558,10 +1036,10 @@ void crv() {
         int D_pick = (int)random(1, D_cont.size() - 1);
         D_st.add(D_cont.get(D_pick - 1));
         D_ed.add(D_cont.get(D_pick));
-        
+
         int rectCount = y1.size();
         for (int w = 0; w < rectCount; w++) {
-          if (y1.get(w) <= val && y2.get(w) >= val && 
+          if (y1.get(w) <= val && y2.get(w) >= val &&
               x1.get(w) >= D_cont.get(D_pick - 1) && x2.get(w) <= D_cont.get(D_pick)) {
             x1.add(x1.get(w));
             y1.add(val);
@@ -580,13 +1058,13 @@ void patch() {
   num = new ArrayList<Integer>();
   for (int i = 0; i < x1.size(); i++) num.add(i);
   Collections.shuffle(num);
-  
-  int q = (int)(x1.size() * keep);
+
+  int q = (int)(x1.size() * percentToPatch);
   xs1 = new ArrayList<Integer>();
   ys1 = new ArrayList<Integer>();
   xs2 = new ArrayList<Integer>();
   ys2 = new ArrayList<Integer>();
-  
+
   for (int i = 0; i < q; i++) {
     int idx = num.get(i);
     xs1.add(x1.get(idx));
@@ -598,9 +1076,13 @@ void patch() {
 
 void colour() {
   rec_col = new ArrayList<Integer>();
-  if (activePalette == null || activePalette.length == 0) {
+  if (fullPalette == null || fullPalette.length == 0) {
     initCustomMondrianPalette();
   }
+  
+  // Refresh the active palette every time to get a fresh random subset
+  updateActivePalette();
+  
   for (int i = 0; i < x1.size(); i++) {
     rec_col.add((int)random(activePalette.length));
   }
@@ -609,11 +1091,11 @@ void colour() {
 // Draw a rectangle representing a line segment
 void drawLineBox(float x1, float y1, float x2, float y2, float thickness) {
   float halfThick = thickness / 2.0f;
-  
+
   rectMode(CORNERS);
   noStroke();
   fill(LINE_COLOR);
-  
+
   if (abs(x1 - x2) < 0.1) {
     // Vertical box - force integer coordinates
     float centerX = round(x1);
@@ -635,41 +1117,41 @@ void drawArtwork() {
     rectMode(CORNERS);
     noStroke();
     int paletteIndex = rec_col.get(h);
-    if (activePalette != null && activePalette.length > 0) {
+    if (activePalette.length > 0) {
       fill(activePalette[paletteIndex % activePalette.length]);
     } else {
       fill(200);  // Fallback gray (should never happen)
     }
-    
+
     float rx1 = round(getX(xs1.get(h)));
     float ry1 = round(getY(ys1.get(h)));
     float rx2 = round(getX(xs2.get(h)));
     float ry2 = round(getY(ys2.get(h)));
     rect(rx1, ry1, rx2, ry2);
   }
-  
+
   // Draw grid lines as boxes
   fill(LINE_COLOR);
   noStroke();
   float halfThick = currentLineWeight / 2.0f;
-  
+
   for (int kk = 0; kk < A_add.size(); kk++) {
     float x = round(getX(A_add.get(kk)));
     rect(x - halfThick, 0, x + halfThick, artHeight);
   }
-  
+
   for (int kk = 0; kk < B_add.size(); kk++) {
     float y = round(getY(B_add.get(kk)));
     rect(0, y - halfThick, artWidth, y + halfThick);
   }
-  
+
   for (int kk = 0; kk < C_add.size(); kk++) {
     float x = round(getX(C_add.get(kk)));
     float y1 = round(getY(C_st.get(kk)));
     float y2 = round(getY(C_ed.get(kk)));
     rect(x - halfThick, y1, x + halfThick, y2);
   }
-  
+
   for (int kk = 0; kk < D_add.size(); kk++) {
     float x1 = round(getX(D_st.get(kk)));
     float x2 = round(getX(D_ed.get(kk)));
@@ -678,454 +1160,235 @@ void drawArtwork() {
   }
 }
 
-void startMakeManyMode() {
-  if (makeManyMode) return;
-  makeManyMode = true;
-  makeManyGenerating = false;
-  makeManyExportDelay = 0;
-  makeManyExportQueued = false;
-  println("MAKE MANY mode started - generating and saving variations");
-}
+boolean startRapidGenMode() {
+  if (rapidGenMode) return false;
 
-void stopMakeManyMode() {
-  makeManyMode = false;
-  makeManyGenerating = false;
-  makeManyExportQueued = false;
-  println("MAKE MANY mode stopped.");
-}
-
-void draw() {
-  background(CANVAS_WHITE);
-  
-  // MAKE MANY state machine
-  if (makeManyMode) {
-    if (makeManyExportDelay > 0) {
-      makeManyExportDelay--;
-    } else if (makeManyExportQueued) {
-      // Export now (after delay frames have passed)
-      if (exportPNG) pendingExportPNG = true;
-      if (exportSVG) pendingExportSVG = true;
-      makeManyExportQueued = false;
-      makeManyExportDelay = 2;  // Brief pause between cycles
-      println("--- MAKE MANY: Cycle complete ---");
-    } else if (!makeManyGenerating) {
-      // Start new generation
-      makeManyGenerating = true;
-      println("--- MAKE MANY: Generating variant ---");
-    }
+  // Check if at least one sub-mode is active
+  if (!rapidLines && !rapidPatch && !rapidColour && !rapidAPI && !rapidGrammar) {
+    println("ERROR: Cannot start RAPID GEN mode - no sub-modes are active!");
+    println("  Enable at least one of: Rapid Lines, Rapid Patch, Rapid Colour, Rapid API, or Rapid Grammar");
     
-    if (makeManyGenerating) {
-      calculateLineWeight();
-      minLineDistance = currentLineWeight * 2;
-      crv();
-      patch();
-      colour();
-      makeManyGenerating = false;
-      makeManyExportQueued = true;
-      makeManyExportDelay = 3;  // Wait 3 frames for rendering to stabilize
-      println("--- MAKE MANY: Exports queued (will export in " + makeManyExportDelay + " frames) ---");
-    }
+    String errorMsg = "ERROR: Enable at least one RAPID mode (Lines, Patch, Colour, API, Grammar)";
+    statusMessage = errorMsg;
+    errorLabel.setText(errorMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 6000;
+    return false;
   }
+
+  rapidGenMode = true;
+  rapidGenGenerating = false;
+  rapidGenExportDelay = 0;
+  rapidGenExportQueued = false;
+  println("RAPID GEN mode started - generating and saving variations");
+  println("  Rapid Lines: " + (rapidLines ? "ON" : "OFF"));
+  println("  Rapid Patch: " + (rapidPatch ? "ON" : "OFF"));
+  println("  Rapid Colour: " + (rapidColour ? "ON" : "OFF"));
+  println("  Rapid API: " + (rapidAPI ? "ON" : "OFF"));
+  println("  Rapid Grammar: " + (rapidGrammar ? "ON" : "OFF"));
   
-  drawArtwork();
+  // Clear error on successful start
+  errorLabel.setText("");
+  errorLabel.setVisible(false);
+  errorLabelHideTime = 0;
   
-  if (millis() - cursorBlinkTime > 500) {
-    cursorBlinkTime = millis();
-    cursorVisible = !cursorVisible;
-  }
-  
-  int uiY = artHeight;
-  rectMode(CORNERS);
-  noStroke();
-  fill(50);
-  rect(0, uiY, width, height);
-  
-  int buttonWidth = 70;
-  int buttonHeight = 28;
-  int buttonSpacing = 10;
-  int startX = width - (buttonWidth * 4 + buttonSpacing * 3);
-  int row1Y = uiY + 12;
-  int row2Y = uiY + 50;
-  
-  // Row 1 buttons
-  fill(80);
-  rect(startX, row1Y, startX + buttonWidth, row1Y + buttonHeight);
-  rect(startX + buttonWidth + buttonSpacing, row1Y, startX + buttonWidth * 2 + buttonSpacing, row1Y + buttonHeight);
-  rect(startX + (buttonWidth + buttonSpacing) * 2, row1Y, startX + buttonWidth * 3 + buttonSpacing * 2, row1Y + buttonHeight);
-  rect(startX + (buttonWidth + buttonSpacing) * 3, row1Y, startX + buttonWidth * 4 + buttonSpacing * 3, row1Y + buttonHeight);
-  
-  fill(255);
-  textSize(10);
-  textAlign(CENTER, CENTER);
-  text("RESET ALL", startX + buttonWidth/2, row1Y + buttonHeight/2);
-  text("SHUFFLE\nCURVE", startX + buttonWidth + buttonSpacing + buttonWidth/2, row1Y + buttonHeight/2);
-  text("SHUFFLE\nPATCH", startX + (buttonWidth + buttonSpacing) * 2 + buttonWidth/2, row1Y + buttonHeight/2);
-  text("SHUFFLE\nCOLOUR", startX + (buttonWidth + buttonSpacing) * 3 + buttonWidth/2, row1Y + buttonHeight/2);
-  
-  // Row 2 buttons
-  int row2ButtonCount = 4;
-  int row2TotalWidth = buttonWidth * row2ButtonCount + buttonSpacing * (row2ButtonCount - 1);
-  int row2StartX = width - row2TotalWidth;
-  
-  fill(80);
-  rect(row2StartX, row2Y, row2StartX + buttonWidth, row2Y + buttonHeight);
-  rect(row2StartX + buttonWidth + buttonSpacing, row2Y, row2StartX + buttonWidth * 2 + buttonSpacing, row2Y + buttonHeight);
-  rect(row2StartX + (buttonWidth + buttonSpacing) * 2, row2Y, row2StartX + buttonWidth * 3 + buttonSpacing * 2, row2Y + buttonHeight);
-  rect(row2StartX + (buttonWidth + buttonSpacing) * 3, row2Y, row2StartX + buttonWidth * 4 + buttonSpacing * 3, row2Y + buttonHeight);
-  
-  fill(255);
-  if (makeManyMode) {
-    text("STOP", row2StartX + buttonWidth/2, row2Y + buttonHeight/2);
-  } else {
-    text("MAKE\nMANY", row2StartX + buttonWidth/2, row2Y + buttonHeight/2);
-  }
-  text("API\nCOLORS", row2StartX + buttonWidth + buttonSpacing + buttonWidth/2, row2Y + buttonHeight/2);
-  text("EXPORT\nPNG", row2StartX + (buttonWidth + buttonSpacing) * 2 + buttonWidth/2, row2Y + buttonHeight/2);
-  text("EXPORT\nSVG", row2StartX + (buttonWidth + buttonSpacing) * 3 + buttonWidth/2, row2Y + buttonHeight/2);
-  
-  // Input fields
-  int inputX = 20;
-  int inputY = uiY + 12;
-  int ruleWidth = 140;
-  int percentWidth = 50;
-  int colorCountWidth = 50;
-  int inputHeight = 28;
-  int spacing = 8;
-  
-  // Rule input
-  if (focusRule) {
-    stroke(100);
-    strokeWeight(2);
-  } else {
-    noStroke();
-  }
-  fill(255);
-  rect(inputX, inputY, inputX + ruleWidth, inputY + inputHeight);
-  fill(0);
-  textAlign(LEFT, CENTER);
-  textSize(11);
-  text(ruleInput, inputX + 5, inputY + inputHeight/2);
-  if (focusRule && cursorVisible) {
-    float textW = textWidth(ruleInput);
-    stroke(0);
-    strokeWeight(1);
-    line(inputX + 5 + textW, inputY + 5, inputX + 5 + textW, inputY + inputHeight - 5);
-  }
-  
-  // Percentage input
-  int percentX = inputX + ruleWidth + spacing;
-  if (focusPercent) {
-    stroke(100);
-    strokeWeight(2);
-  } else {
-    noStroke();
-  }
-  fill(255);
-  rect(percentX, inputY, percentX + percentWidth, inputY + inputHeight);
-  fill(0);
-  textAlign(CENTER, CENTER);
-  text(percentText, percentX + percentWidth/2, inputY + inputHeight/2);
-  if (focusPercent && cursorVisible) {
-    float textW = textWidth(percentText);
-    stroke(0);
-    strokeWeight(1);
-    line(percentX + percentWidth/2 + textW/2, inputY + 5,
-         percentX + percentWidth/2 + textW/2, inputY + inputHeight - 5);
-  }
-  
-  // Color count input
-  int colorCountX = percentX + percentWidth + spacing;
-  if (focusColorCount) {
-    stroke(100);
-    strokeWeight(2);
-  } else {
-    noStroke();
-  }
-  fill(255);
-  rect(colorCountX, inputY, colorCountX + colorCountWidth, inputY + inputHeight);
-  fill(0);
-  textAlign(CENTER, CENTER);
-  text(colorCountText, colorCountX + colorCountWidth/2, inputY + inputHeight/2);
-  if (focusColorCount && cursorVisible) {
-    float textW = textWidth(colorCountText);
-    stroke(0);
-    strokeWeight(1);
-    line(colorCountX + colorCountWidth/2 + textW/2, inputY + 5,
-         colorCountX + colorCountWidth/2 + textW/2, inputY + inputHeight - 5);
-  }
-  
-  // Labels
-  noStroke();
-  fill(200);
-  textSize(9);
-  textAlign(LEFT, CENTER);
-  text("Rule String (ENTER to apply)", inputX, inputY + inputHeight + 12);
-  text("Fill %", percentX + percentWidth/2, inputY + inputHeight + 12);
-  text("Colors\n(0=all)", colorCountX + colorCountWidth/2, inputY + inputHeight + 12);
-  
-  // Version and instructions
-  String paletteInfo = " | Palette: " + paletteSource;
-  if (paletteSource.equals("api") && lastAPIPaletteName.length() > 0) {
-    paletteInfo += " - " + lastAPIPaletteName;
-  }
-  if (fullPalette != null) {
-    paletteInfo += " (" + fullPalette.length + " colors";
-    if (activePalette != null) {
-      paletteInfo += ", using " + activePalette.length;
-    }
-    paletteInfo += ")";
-  }
-  
-  // Add line weight info to status display
-  String lineWeightInfo = " | Line weight: " + nf(currentLineWeight, 0, 0) + "px";
-  
-  fill(200);
-  textAlign(LEFT, CENTER);
-  textSize(9);
-  text(scriptName + " v" + scriptVersion + " | " + artWidth + "x" + artHeight + " | Grid: " + gridSizeX + "x" + gridSizeY + paletteInfo + lineWeightInfo, 20, height - 25);
-  
-  textAlign(CENTER, CENTER);
-  String modeInfo = "";
-  if (makeManyMode) {
-    modeInfo = " | MAKE MANY ACTIVE - Click STOP to halt generation";
-  }
-  text("S - Save PNG/SVG | Click API COLORS to fetch new palette | Line weight varies per run (proportional to canvas width)" + modeInfo, width/2, height - 12);
-  
-  if (pendingExportPNG) {
-    exportToPNG();
-    pendingExportPNG = false;
-  }
-  if (pendingExportSVG) {
-    exportToSVG();
-    pendingExportSVG = false;
-  }
+  return true;
 }
 
-void mouseClicked() {
-  int uiY = artHeight;
-  int buttonWidth = 70;
-  int buttonSpacing = 10;
-  int row1StartX = width - (buttonWidth * 4 + buttonSpacing * 3);
-  int row1Y = uiY + 12;
-  int row2ButtonCount = 4;
-  int row2TotalWidth = buttonWidth * row2ButtonCount + buttonSpacing * (row2ButtonCount - 1);
-  int row2StartX = width - row2TotalWidth;
-  int row2Y = uiY + 50;
-  
-  // Row 1 buttons
-  if (mouseX > row1StartX && mouseX < row1StartX + buttonWidth && mouseY > row1Y && mouseY < row1Y + 28) {
-    if (makeManyMode) stopMakeManyMode();
-    rule = "AABBCCDDDDDD";
-    ruleInput = rule;
-    keep = 0.5;
-    percentText = "50";
-    initCustomMondrianPalette();
-    focusRule = true;
-    focusPercent = false;
-    focusColorCount = false;
-    crv();
-    patch();
-    colour();
-    return;
-  }
-  
-  if (mouseX > row1StartX + buttonWidth + buttonSpacing && mouseX < row1StartX + buttonWidth * 2 + buttonSpacing && 
-      mouseY > row1Y && mouseY < row1Y + 28) {
-    if (makeManyMode) stopMakeManyMode();
-    crv();
-    patch();
-    return;
-  }
-  
-  if (mouseX > row1StartX + (buttonWidth + buttonSpacing) * 2 && mouseX < row1StartX + buttonWidth * 3 + buttonSpacing * 2 && 
-      mouseY > row1Y && mouseY < row1Y + 28) {
-    patch();
-    return;
-  }
-  
-  if (mouseX > row1StartX + (buttonWidth + buttonSpacing) * 3 && mouseX < row1StartX + buttonWidth * 4 + buttonSpacing * 3 && 
-      mouseY > row1Y && mouseY < row1Y + 28) {
-    colour();
-    return;
-  }
-  
-  // Row 2 buttons
-  if (mouseX > row2StartX && mouseX < row2StartX + buttonWidth && mouseY > row2Y && mouseY < row2Y + 28) {
-    if (makeManyMode) {
-      stopMakeManyMode();
-    } else {
-      startMakeManyMode();
-    }
-    return;
-  }
-  
-  if (mouseX > row2StartX + buttonWidth + buttonSpacing && mouseX < row2StartX + buttonWidth * 2 + buttonSpacing && 
-      mouseY > row2Y && mouseY < row2Y + 28) {
-    fetchColorsFromAPI();
-    return;
-  }
-  
-  if (mouseX > row2StartX + (buttonWidth + buttonSpacing) * 2 && mouseX < row2StartX + buttonWidth * 3 + buttonSpacing * 2 && 
-      mouseY > row2Y && mouseY < row2Y + 28) {
-    exportToPNG();
-    return;
-  }
-  
-  if (mouseX > row2StartX + (buttonWidth + buttonSpacing) * 3 && mouseX < row2StartX + buttonWidth * 4 + buttonSpacing * 3 && 
-      mouseY > row2Y && mouseY < row2Y + 28) {
-    exportToSVG();
-    return;
-  }
-  
-  // Text field clicks
-  int inputX = 20;
-  int ruleWidth = 140;
-  int percentWidth = 50;
-  int colorCountWidth = 50;
-  int spacing = 8;
-  int inputY = uiY + 12;
-  int inputHeight = 28;
-  
-  if (mouseX > inputX && mouseX < inputX + ruleWidth && mouseY > inputY && mouseY < inputY + inputHeight) {
-    focusRule = true;
-    focusPercent = false;
-    focusColorCount = false;
-    cursorBlinkTime = millis();
-    cursorVisible = true;
-    return;
-  }
-  
-  int percentX = inputX + ruleWidth + spacing;
-  if (mouseX > percentX && mouseX < percentX + percentWidth && mouseY > inputY && mouseY < inputY + inputHeight) {
-    focusRule = false;
-    focusPercent = true;
-    focusColorCount = false;
-    cursorBlinkTime = millis();
-    cursorVisible = true;
-    return;
-  }
-  
-  int colorCountX = percentX + percentWidth + spacing;
-  if (mouseX > colorCountX && mouseX < colorCountX + colorCountWidth && mouseY > inputY && mouseY < inputY + inputHeight) {
-    focusRule = false;
-    focusPercent = false;
-    focusColorCount = true;
-    cursorBlinkTime = millis();
-    cursorVisible = true;
-    return;
-  }
-  
-  focusRule = false;
-  focusPercent = false;
-  focusColorCount = false;
+void stopRapidGenMode() {
+  rapidGenMode = false;
+  rapidGenGenerating = false;
+  rapidGenExportQueued = false;
+  // Clear any pending API calls
+  pendingAPICall = false;
+  newPaletteReady = false;
+  println("RAPID GEN mode stopped.");
 }
 
-void keyPressed() {
-  if (focusPercent) {
-    if (key >= '0' && key <= '9') {
-      String newText = percentText;
-      if (newText.equals("0") && key != '0') {
-        newText = "" + key;
-      } else if (newText.length() < 3) {
-        newText = newText + key;
-      }
-      int percent = int(newText);
-      if (percent >= 0 && percent <= 100) {
-        percentText = newText;
-        // keep and patch NOT updated here
-      }
-    } else if ((key == BACKSPACE || key == DELETE) && percentText.length() > 0) {
-      percentText = percentText.substring(0, percentText.length() - 1);
-      if (percentText.length() == 0) percentText = "0";
-      // keep and patch NOT updated here
-    } else if (key == ENTER) {
-      int percent = int(percentText);
-      if (percent >= 0 && percent <= 100) {
-        keep = percent / 100.0;
-        patch();
+void generateRapidVariant() {
+  boolean linesChanged = false;
+
+  // Randomize grammar if rapidGrammar is on
+  if (rapidGrammar) {
+    String newGrammar = grammarGenerator.getRandomGrammar();
+    println("RAPID GRAMMAR: Generated: " + newGrammar);  // Print to stdout
+
+    if (!newGrammar.equals(grammar)) {
+      grammar = newGrammar;
+      println("RAPID GRAMMAR: Applying: " + grammar);  // Print to stdout
+
+      // Update the text field display
+      grammarField.setText(grammar);
+      // Force the text field to redraw
+      grammarField.setColorBackground(color(64));
+
+      linesChanged = true;
+    }
+  }
+
+  if (rapidLines || linesChanged) {
+    crv();  // Generates new line configuration and random line weight
+    linesChanged = true;
+  }
+
+  // If lines changed, we MUST also run patch() to update patch geometry,
+  // regardless of rapidPatch setting. Otherwise patches from old grid
+  // will be drawn on new grid lines.
+  if (rapidPatch || linesChanged) {
+    patch();  // Shuffle which patches are colored
+  }
+
+  if (rapidColour) {
+    colour();  // Shuffle colors assignment
+  }
+
+  // API handling is separate and happens in draw()
+}
+
+int crashCount = 0;
+void draw() {
+  // Draw background for the UI panel area (below the artwork)
+  fill(color(uiBackgroundColor));
+  noStroke();
+  rect(0, artHeight, width, uiPanelHeight);
+
+  // Now draw the white artwork background
+  fill(CANVAS_WHITE);
+  rect(0, 0, artWidth, artHeight);
+
+  // RAPID GEN state machine
+  if (rapidGenMode) {
+    // Check for pending API response if rapidAPI is on
+    if (rapidAPI && pendingAPICall) {
+      // Check for timeout
+      if (millis() - apiCallStartTime > API_TIMEOUT_MS) {
+        println("RAPID API: Timeout after 12 seconds - continuing with existing palette");
+        pendingAPICall = false;
+        newPaletteReady = false;
+      } else if (newPaletteReady) {
+        // API call completed successfully (or failed but newPaletteReady flagged)
+        if (fullPalette.length > 0) {
+          updateActivePalette();
+          colour();  // Recolor with new palette
+          println("RAPID API: New palette applied (" + fullPalette.length + " colors)");
+        }
+        pendingAPICall = false;
+        newPaletteReady = false;
+      } else {
+        // Still waiting for API - pause generation cycle
+        // Don't proceed with generation until API responds
+        // We'll just redraw current artwork
+        drawArtwork();
+        // Don't return - let exports still happen
       }
     }
-  } else if (focusColorCount) {
-    if (key >= '0' && key <= '9') {
-      String newText = colorCountText;
-      if (newText.equals("0") && key != '0') {
-        newText = "" + key;
-      } else if (newText.length() < 3) {
-        newText = newText + key;
+
+    if (rapidGenExportDelay > 0) {
+      rapidGenExportDelay--;
+    } else if (rapidGenExportQueued) {
+      // Generate base name now for paired export
+      pendingExportBaseName = getTimestamp();
+      rapidGenExportQueued = false;
+      rapidGenExportDelay = 2;  // Brief pause between cycles
+      println("--- RAPID GEN: Cycle complete ---");
+    } else if (!rapidGenGenerating) {
+      // Start new generation
+      rapidGenGenerating = true;
+      println("--- RAPID GEN: Generating variant ---");
+
+      try {
+        generateRapidVariant();
+      } catch (IndexOutOfBoundsException e) {
+        crashCount++;
+        println("!!! CRASH #" + crashCount + " !!!");
+        println("  Failed grammar: " + grammar);
+        println("  Grammar length: " + grammar.length());
+        println("  Exception: " + e.getMessage());
+        rapidGenGenerating = false;
+        rapidGenExportQueued = false;
+        rapidGenExportDelay = 0;
+        return;
       }
-      colorCountText = newText;
-    } else if ((key == BACKSPACE || key == DELETE) && colorCountText.length() > 0) {
-      colorCountText = colorCountText.substring(0, colorCountText.length() - 1);
-      if (colorCountText.length() == 0) colorCountText = "0";
-    } else if (key == ENTER) {
-      int limit = int(colorCountText);
-      if (limit < 0) limit = 1;
-      if (fullPalette != null && limit > fullPalette.length) limit = fullPalette.length;
-      colorCountText = str(limit);
-      updateActivePalette();
-      colour();
-    }
-  } else if (focusRule) {
-    if (key == ENTER) {
-      String cleaned = "";
-      for (int i = 0; i < ruleInput.length(); i++) {
-        char c = Character.toUpperCase(ruleInput.charAt(i));
-        if (c == 'A' || c == 'B' || c == 'C' || c == 'D') {
-          cleaned += c;
+
+      if (rapidAPI && !pendingAPICall) {
+        if (!APIcallDelaySet) {
+          APIcallDelaySet = true;
+          // set start time for API all delay
+          APImillisElapsed = millis();
+          println("APIcallDelaySet: have set APImillisElapsed " + APImillisElapsed + " to wait for call");
+        } else {
+          // if the intended delay between API calls has elapsed, try an API call
+          if (millis() - APImillisElapsed > API_DELAY_BETWEEN_CALLS)
+          {
+            APIcallDelaySet = false;
+            pendingAPICall = true;
+            newPaletteReady = false;
+            apiCallStartTime = millis();
+            fetchColorsFromAPI();
+            println("Color retrieval API: Fetching new palette...");
+            // Note: We already generated the variant, now wait for API to update colors for NEXT cycle
+          }
         }
       }
-      if (cleaned.length() > 0) {
-        rule = cleaned;
-        ruleInput = cleaned;
-        crv();
-        patch();
-        colour();
-      }
-    } else if ((key == BACKSPACE || key == DELETE) && ruleInput.length() > 0) {
-      ruleInput = ruleInput.substring(0, ruleInput.length() - 1);
-    } else if (key != CODED && key != ENTER && key != BACKSPACE && key != DELETE) {
-      if (ruleInput.length() < 32) {
-        ruleInput = ruleInput + key;
-      }
+
+      rapidGenGenerating = false;
+      rapidGenExportQueued = true;
+      rapidGenExportDelay = 3;  // Wait 3 frames for rendering to stabilize
+      println("--- RAPID GEN: Exports queued (will export in " + rapidGenExportDelay + " frames) ---");
     }
   }
-  
-  if (key == 's' || key == 'S') {
-    if (exportPNG) exportToPNG();
-    if (exportSVG) exportToSVG();
+
+  drawArtwork();
+
+  // Process pending rapid gen export with paired naming
+  if (pendingExportBaseName != null) {
+    if (exportPNG) exportToPNG(pendingExportBaseName);
+    if (exportSVG) exportToSVG(pendingExportBaseName);
+    pendingExportBaseName = null;
   }
-  
-  cursorBlinkTime = millis();
-  cursorVisible = true;
+
+  if (errorLabelHideTime > 0 && millis() > errorLabelHideTime) {
+    String clearString = String.format("%-80s", "");
+    errorLabel.setText(clearString);
+    errorLabelHideTime = 0;
+  }
 }
 
 String getTimestamp() {
   Calendar cal = Calendar.getInstance();
-  return String.format("%04d_%02d_%02d_%02d_%02d_%02d",
+  String rnd_chars_for_timestamp_end = randomString(6);
+  return String.format("%04d_%02d_%02d_%02d_%02d_%02d__%04d_%s",
     cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH),
-    cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND));
+    cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND),
+    cal.get(Calendar.MILLISECOND), rnd_chars_for_timestamp_end
+  );
 }
 
+// PNG export function that handles basename creation
+// itself by creating the basename and passing it to the main function
 void exportToPNG() {
-  String timestamp = getTimestamp();
-  String baseFilename = timestamp + "_" + scriptName + "_v" + scriptVersion;
-  String filename = baseFilename + ".png";
-  
+  exportToPNG(getTimestamp());
+}
+
+// main PNG export function
+void exportToPNG(String baseName) {
+  String filename = baseName + ".png";
+
   // Force rendering to complete before capture
   loadPixels();
-  
+
   // Capture just the artwork area
   PImage artwork = get(0, 0, artWidth, artHeight);
   artwork.save(filename);
-  
+
   // Save metadata as .txt with same base name
-  String metadataFile = baseFilename + ".txt";
+  String metadataFile = baseName + ".txt";
   PrintWriter output = createWriter(metadataFile);
   output.println("Created with " + scriptName + ".pde v" + scriptVersion);
   output.println("Dimensions: " + artWidth + "x" + artHeight);
   output.println("Grid: " + gridSizeX + "x" + gridSizeY);
-  output.println("Grammar: " + rule);
-  output.println("Fill percentage: " + percentText + "%");
+  output.println("Grammar: " + grammar);
+  output.println("Fill percentage: " + int(percentToPatch * 100) + "%");
   output.println("Line weight: " + currentLineWeight + "px (proportional to " + artWidth + "px width)");
   output.println("Line color: #" + hex(LINE_COLOR, 6));
   output.println("Canvas white: #" + hex(CANVAS_WHITE, 6));
@@ -1137,6 +1400,9 @@ void exportToPNG() {
   } else {
     output.println("Color palette source: " + paletteSource);
   }
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+  output.println("API query parameters - min: " + minVal + (minVal == 0 ? " (no minimum)" : "") + ", max: " + (maxVal == 0 ? "unlimited" : str(maxVal)));
   if (fullPalette != null) {
     output.println("Full palette size: " + fullPalette.length);
     output.println("Colors in full palette (excluding white):");
@@ -1144,21 +1410,24 @@ void exportToPNG() {
       output.println("#" + hex(fullPalette[i], 6));
     }
   }
-  if (activePalette != null) {
-    output.println("Active colors: " + activePalette.length);
-  }
+  output.println("Active colors: " + activePalette.length);
   output.flush();
   output.close();
   println("Saved PNG: " + filename);
 }
 
+// SVG export function that handles basename creation
+// itself by creating the basename and passing it to the main function
 void exportToSVG() {
-  String timestamp = getTimestamp();
-  String baseFilename = timestamp + "_" + scriptName + "_v" + scriptVersion;
-  String filename = baseFilename + ".svg";
-  
+  exportToSVG(getTimestamp());
+}
+
+// Main SVG export function
+void exportToSVG(String baseName) {
+  String filename = baseName + ".svg";
+
   PrintWriter output = createWriter(filename);
-  
+
   // Write SVG header - NO SCALING
   output.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
   output.println("<svg xmlns=\"http://www.w3.org/2000/svg\"");
@@ -1169,7 +1438,7 @@ void exportToSVG() {
   output.println("     width=\"" + artWidth + "\"");
   output.println("     height=\"" + artHeight + "\"");
   output.println("     viewBox=\"0 0 " + artWidth + " " + artHeight + "\">");
-  
+
   // Add metadata using variables
   output.println("  <metadata>");
   output.println("    <rdf:RDF>");
@@ -1178,8 +1447,8 @@ void exportToSVG() {
   output.println("          Created with " + scriptName + ".pde v" + scriptVersion);
   output.println("          Dimensions: " + artWidth + "x" + artHeight);
   output.println("          Grid: " + gridSizeX + "x" + gridSizeY);
-  output.println("          Grammar: " + rule);
-  output.println("          Fill percentage: " + percentText + "%");
+  output.println("          Grammar: " + grammar);
+  output.println("          Fill percentage: " + int(percentToPatch * 100) + "%");
   output.println("          Line weight: " + currentLineWeight + "px");
   output.println("          Line color: #" + hex(LINE_COLOR, 6));
   output.println("          Canvas white: #" + hex(CANVAS_WHITE, 6));
@@ -1189,6 +1458,9 @@ void exportToSVG() {
   } else {
     output.println("          Color palette source: " + paletteSource);
   }
+  int minVal = parseInt(apiColorsMinField.getText());
+  int maxVal = parseInt(apiColorsMaxField.getText());
+  output.println("          API query parameters - min: " + minVal + (minVal == 0 ? " (no minimum)" : "") + ", max: " + (maxVal == 0 ? "unlimited" : str(maxVal)));
   if (fullPalette != null) {
     output.println("          Full palette size: " + fullPalette.length);
     output.println("          Colors in full palette (excluding white):");
@@ -1203,41 +1475,41 @@ void exportToSVG() {
   output.println("      </cc:Work>");
   output.println("    </rdf:RDF>");
   output.println("  </metadata>");
-  
+
   // Draw canvas background using variable
   output.println("  <rect x=\"0\" y=\"0\" width=\"" + artWidth + "\" height=\"" + artHeight + "\" fill=\"#" + hex(CANVAS_WHITE, 6) + "\"/>");
-  
+
   // Draw all colored rectangles
   for (int h = 0; h < xs1.size(); h++) {
     float x = getX(xs1.get(h));
     float y = getY(ys1.get(h));
     float w = getX(xs2.get(h)) - x;
     float hgt = getY(ys2.get(h)) - y;
-    
+
     int paletteIndex = rec_col.get(h);
     color c = activePalette[paletteIndex % activePalette.length];
-    
-    output.println("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + w + "\" height=\"" + hgt + 
+
+    output.println("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + w + "\" height=\"" + hgt +
                    "\" fill=\"#" + hex(c, 6) + "\" stroke=\"none\"/>");
   }
-  
+
   // Draw all grid lines as RECTANGLES using color from variable
   output.println("  <g fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\">");
-  
+
   float halfThick = currentLineWeight / 2.0f;
-  
+
   // Full vertical lines (boxes)
   for (int kk = 0; kk < A_add.size(); kk++) {
     float x = getX(A_add.get(kk));
     output.println("    <rect x=\"" + (x - halfThick) + "\" y=\"0\" width=\"" + currentLineWeight + "\" height=\"" + artHeight + "\"/>");
   }
-  
+
   // Full horizontal lines (boxes)
   for (int kk = 0; kk < B_add.size(); kk++) {
     float y = getY(B_add.get(kk));
     output.println("    <rect x=\"0\" y=\"" + (y - halfThick) + "\" width=\"" + artWidth + "\" height=\"" + currentLineWeight + "\"/>");
   }
-  
+
   // Segmented vertical lines (boxes)
   for (int kk = 0; kk < C_add.size(); kk++) {
     float x = getX(C_add.get(kk));
@@ -1245,7 +1517,7 @@ void exportToSVG() {
     float y2 = getY(C_ed.get(kk));
     output.println("    <rect x=\"" + (x - halfThick) + "\" y=\"" + y1 + "\" width=\"" + currentLineWeight + "\" height=\"" + (y2 - y1) + "\"/>");
   }
-  
+
   // Segmented horizontal lines (boxes)
   for (int kk = 0; kk < D_add.size(); kk++) {
     float x1 = getX(D_st.get(kk));
@@ -1253,11 +1525,27 @@ void exportToSVG() {
     float y = getY(D_add.get(kk));
     output.println("    <rect x=\"" + x1 + "\" y=\"" + (y - halfThick) + "\" width=\"" + (x2 - x1) + "\" height=\"" + currentLineWeight + "\"/>");
   }
-  
+
   output.println("  </g>");
   output.println("</svg>");
   output.flush();
   output.close();
-  
+
   println("Saved SVG: " + filename);
+}
+
+// Wrapper to export both formats with the same base name;
+// in all settings we do this it overrides export booleans, so no boolean checks:
+void exportVariant() {
+  String baseName = getTimestamp();
+  exportToPNG(baseName);
+  exportToSVG(baseName);
+}
+
+// export PNG and SVG on keypress:
+void keyPressed() {
+  if (key == 's' || key == 'S') {
+    exportVariant();  // Use wrapper for paired exports
+    println("Manual export triggered via keyboard; PNG and SVG of current variant saved.");
+  }
 }
