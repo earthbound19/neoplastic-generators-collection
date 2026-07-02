@@ -1,7 +1,11 @@
 // DESCRIPTION
 // Ported from p5js (OpenProcessing sketch 381152) by Queen Bee Art to desktop Processing: https://www.openprocessing.org/sketch/381152/
-// From information metadata at source: (Piet) Mondrian compositions computed using shape grammar. 'A' adds vertical lines,
-// 'B' adds horizontal lines, 'C' adds split vertical lines, and 'D' adds split horizontal lines. The text field controls the
+// From information metadata at source: (Piet) Mondrian compositions computed using shape grammar:
+// - 'A' adds vertical lines,
+// - 'B' adds horizontal lines
+// - 'C' adds a vertical line between horizontal lines (segmented or within a rectangle), and
+// - 'D' adds a horizontal line between vertical lines (segmented or within another rectangle).
+// The text field controls the
 // number of patches that are coloured. For more information see DEPENDENCIES and USAGE below. For information on features
 // added after the initial port, see ADDITIONAL FEATURES, below.
 //
@@ -68,7 +72,7 @@
 //  - how? simply delete or never render the black lines around them? I think they may be fills, not lines. also at: https://www.wikiart.org/en/piet-mondrian/composition-no-10-1942
 
 
-String scriptVersion = "2.22.0";
+String scriptVersion = "2.24.6";
 String scriptName = "Mondrian_Processing";
 String paletteSource = "custom_mondrian";
 String lastAPIPaletteName = "";
@@ -135,9 +139,9 @@ int canvasHeight;
 int gridSizeX;           // Number of horizontal divisions
 int gridSizeY;           // Number of vertical divisions
 
-String grammar = "AAAABBBBCCCCDDD";
+String grammar = "CABDDDCDADD";
 // see comments at grammarGenerator initialization and in GrammarGenerator.pde:
-int maxLetterRepetitionForGrammarGenerator = 4;
+int maxLetterRepetitionForGrammarGenerator = 11;
 float percentToPatch = 0.33;
 
 // RAPID GEN mode - frame-based state machine (no background thread)
@@ -545,6 +549,12 @@ void shuffleGrammar() {
     // not an edge case I care about; repeating the grammar is acceptable.
     // if we get the same grammar that's fine, so just above we immediately
     // use whatever.
+
+    // regenerate everything dependent on the grammar after it changes:
+    crv();
+    patch();   // Update patches for the new line layout
+    colour();  // Recolor with new patches
+
   } else {
     println("Can't shuffle grammar while RAPID GEN active");
     errorLabel.setText("ERROR: Stop RAPID GEN first");
@@ -983,7 +993,7 @@ void crv() {
         }
         C_cont.add(gridSizeY);
         Collections.sort(C_cont);
-        int C_pick = (int)random(1, C_cont.size() - 1);
+        int C_pick = 1 + (int)random(C_cont.size() - 1);
         C_st.add(C_cont.get(C_pick - 1));
         C_ed.add(C_cont.get(C_pick));
 
@@ -1035,7 +1045,11 @@ void crv() {
         }
         D_cont.add(gridSizeX);
         Collections.sort(D_cont);
-        int D_pick = (int)random(1, D_cont.size() - 1);
+        // NOTE! A previous cast rounding error made this always pick the 1st quadrant in
+        // a case of an AB cross! Fixed now; it will pick from any quadrant. Similar fixed issue
+        // with ABC:
+        int D_pick = 1 + (int)random(D_cont.size() - 1);
+
         D_st.add(D_cont.get(D_pick - 1));
         D_ed.add(D_cont.get(D_pick));
 

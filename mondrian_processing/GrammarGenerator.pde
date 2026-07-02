@@ -1,58 +1,60 @@
 // DESCRIPTION
 // GrammarGenerator.pde
-// Generates all ordered sequences of letters A,B,C,D where:
-// - Each letter appears consecutively (all As, then all Bs, then all Cs, then all Ds)
-// - Each letter appears between 1 and N times (N = maxRepetition, default 5)
-// - Total sequences = N^4 (e.g., 5^4 = 625 grammars)
+// Generates all possible sequences of letters A,B,C,D where:
+// - Each sequence length is between 1 and maxTotalLength
+// - Letters can appear in any order (all permutations with repetition)
+// - Total sequences = sum_{n=1}^{maxTotalLength} 4^n
 // 
-// This is a Cartesian product of counts: [1..N] × [1..N] × [1..N] × [1..N]
-// Each grammar is a concatenation of repeated letters: Aᵃ Bᵇ Cᶜ Dᵈ
-// where a,b,c,d ∈ {1,2,...,N}
+// Example with maxTotalLength=3: 
+// Length 1: A, B, C, D
+// Length 2: AA, AB, AC, AD, BA, BB, BC, BD, CA, CB, CC, CD, DA, DB, DC, DD
+// Length 3: AAA, AAB, AAC, AAD, ... DDD
+// 
+// This gives ALL possible grammars, not just alphabetical-order grouped ones
+// (a previous version did that).
 //
-// Example with N=3: "ABCD", "AABCD", "AAABCD", "ABBCD", "AAABBBCCCDDD", etc.
-//
-// Companion script (imported) to Mondrian_processing.pde.
-
-
-// CODE
+// WARNING: This grows exponentially! 4^1 + 4^2 + ... + 4^N
+// - N=4: 4 + 16 + 64 + 256 = 340 grammars
+// - N=5: 4 + 16 + 64 + 256 + 1024 = 1364 grammars
+// - N=6: 4 + 16 + 64 + 256 + 1024 + 4096 = 5460 grammars
+// - N=7: 4 + 16 + 64 + 256 + 1024 + 4096 + 16384 = 21844 grammars
+// - N=8: 4 + 16 + 64 + 256 + 1024 + 4096 + 16384 + 65536 = 87380 grammars
+// 
+// Use maxTotalLength carefully! Default 4 is safe and gives variety.
 
 class GrammarGenerator {
   ArrayList<String> allGrammars;
-  int maxRepetition;  // 1-5 typically, but can be any number
+  int maxTotalLength;
+  String letters = "ABCD";
   
-  // Constructor with default maxRepetition = 5
+  // Constructor with default maxTotalLength = 4
   GrammarGenerator() {
-    this(5);  // Default to 5
+    this(4);  // Default to 4
   }
   
-  // Constructor with custom maxRepetition
-  GrammarGenerator(int maxRep) {
-    maxRepetition = maxRep;
+  // Constructor with custom maxTotalLength
+  GrammarGenerator(int maxLen) {
+    maxTotalLength = maxLen;
     allGrammars = new ArrayList<String>();
     generateAllGrammars();
-    println("Generated " + allGrammars.size() + " grammars (max " + maxRepetition + " per letter)");
+    println("Generated " + allGrammars.size() + " grammars (max length " + maxTotalLength + ")");
   }
   
   void generateAllGrammars() {
-    for (int aCount = 1; aCount <= maxRepetition; aCount++) {
-      for (int bCount = 1; bCount <= maxRepetition; bCount++) {
-        for (int cCount = 1; cCount <= maxRepetition; cCount++) {
-          for (int dCount = 1; dCount <= maxRepetition; dCount++) {
-            String grammar = "";
-            for (int i = 0; i < aCount; i++) grammar += "A";
-            for (int i = 0; i < bCount; i++) grammar += "B";
-            for (int i = 0; i < cCount; i++) grammar += "C";
-            for (int i = 0; i < dCount; i++) grammar += "D";
-            allGrammars.add(grammar);
-          }
-        }
-      }
+    // Generate all sequences from length 1 to maxTotalLength
+    for (int len = 1; len <= maxTotalLength; len++) {
+      generateSequences("", len);
     }
-    
-    println("GrammarGenerator: Generated " + allGrammars.size() + " grammars");
-    // Print first 10 as sample
-    for (int i = 0; i < min(10, allGrammars.size()); i++) {
-      println("  Sample " + i + ": " + allGrammars.get(i));
+  }
+  
+  // Recursive helper to generate all sequences of exact length
+  void generateSequences(String prefix, int remaining) {
+    if (remaining == 0) {
+      allGrammars.add(prefix);
+      return;
+    }
+    for (int i = 0; i < letters.length(); i++) {
+      generateSequences(prefix + letters.charAt(i), remaining - 1);
     }
   }
   
@@ -68,7 +70,7 @@ class GrammarGenerator {
     return allGrammars.size();
   }
   
-  int getMaxRepetition() {
-    return maxRepetition;
+  int getMaxTotalLength() {
+    return maxTotalLength;
   }
 }

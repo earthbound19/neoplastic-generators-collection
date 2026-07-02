@@ -24,7 +24,7 @@ import sys
 
 
 def generate_grammar(target_lines: int) -> str:
-    """Generate a grouped grammar of length target_lines."""
+    """Generate a randomly ordered grammar of length target_lines."""
     
     # Ensure each letter appears at least once for a meaningful composition
     if target_lines < 4:
@@ -52,7 +52,12 @@ def generate_grammar(target_lines: int) -> str:
         remaining -= 1
     
     # Build grouped grammar: all A's, then B's, then C's, then D's
-    return 'A' * a + 'B' * b + 'C' * c + 'D' * d
+    grouped = 'A' * a + 'B' * b + 'C' * c + 'D' * d
+    
+    # Convert to list and shuffle for random order
+    shuffled = list(grouped)
+    random.shuffle(shuffled)
+    return ''.join(shuffled)
 
 
 def main():
