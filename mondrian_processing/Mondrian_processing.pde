@@ -68,7 +68,7 @@
 //  - how? simply delete or never render the black lines around them? I think they may be fills, not lines. also at: https://www.wikiart.org/en/piet-mondrian/composition-no-10-1942
 
 
-String scriptVersion = "2.18.24";
+String scriptVersion = "2.22.0";
 String scriptName = "Mondrian_Processing";
 String paletteSource = "custom_mondrian";
 String lastAPIPaletteName = "";
@@ -164,6 +164,8 @@ String pendingExportBaseName = null;  // for paired rapid gen PNG and SVG export
 
 String statusMessage = "";
 int statusMessageTimer = 0;
+
+int placedLinesCount = 0;
 
 // We can do this because of the tab or import of the code file GrammarGenerator.pde, in the same directory:
 GrammarGenerator grammarGenerator;
@@ -1052,6 +1054,10 @@ void crv() {
       }
     }
   }
+  // count total placed lines
+  placedLinesCount = A_add.size() + B_add.size() + C_add.size() + D_add.size();
+  println("Placed lines: " + placedLinesCount + " (A:" + A_add.size() + 
+          " B:" + B_add.size() + " C:" + C_add.size() + " D:" + D_add.size() + ")");
 }
 
 void patch() {
@@ -1411,6 +1417,9 @@ void exportToPNG(String baseName) {
     }
   }
   output.println("Active colors: " + activePalette.length);
+  output.println("Placed lines: " + placedLinesCount);
+  output.println("Line breakdown - A:" + A_add.size() + " B:" + B_add.size() + 
+               " C:" + C_add.size() + " D:" + D_add.size());
   output.flush();
   output.close();
   println("Saved PNG: " + filename);
@@ -1450,6 +1459,9 @@ void exportToSVG(String baseName) {
   output.println("          Grammar: " + grammar);
   output.println("          Fill percentage: " + int(percentToPatch * 100) + "%");
   output.println("          Line weight: " + currentLineWeight + "px");
+  output.println("          Placed lines: " + placedLinesCount);
+  output.println("          Line breakdown - A:" + A_add.size() + " B:" + B_add.size() + 
+                " C:" + C_add.size() + " D:" + D_add.size());
   output.println("          Line color: #" + hex(LINE_COLOR, 6));
   output.println("          Canvas white: #" + hex(CANVAS_WHITE, 6));
   if (lastAPIPaletteURL.length() > 0) {
