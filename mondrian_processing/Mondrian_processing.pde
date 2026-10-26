@@ -58,6 +58,7 @@
 //
 // CODE
 // TO DO
+// - fix metadata in svg and txt to cite actual palette when API retrieves a palette (neither does)
 // - museum mode: only display artwork area, fullscreen, no UI controls, with RAPID API (new palettes) etc. active
 //   for every new render, then doing the render when ready.
 // - in museum mode, every 7th iteration use default Mondrian palette as throwback?
@@ -113,8 +114,8 @@ float furtherScaleFactor = 1;
 // or 26.36in x	24.79x, which @ 72dpi is 1898px x	1785px; aspect w/h = 1.06 -- pretty much, he
 // liked squares, but there was variation -- AND from another survey (different image set) I got
 // average 839 x 886 px; this hard-coded may proportionally scale down from that (aspect w/h = 0.9469) :
-int artWidth = 840;
-int artHeight = 886;
+int artWidth = 1444;
+int artHeight = 760;
 int uiPanelHeight = 120;  // Height reserved for UI controls below artwork
 int gridSizeReference = 28;  // Reference grid size for the shorter dimension; orig. 32 and hard-coded may differ
 
@@ -127,8 +128,8 @@ int gridSizeReference = 28;  // Reference grid size for the shorter dimension; o
 //  - minimum line weight matching Mondrian neoplastic paintings real-world size is: 22px
 //  - maximum line weight matching Mondrian neoplastic paintings real-world size is: 68px
 final float REFERENCE_WIDTH = 2438;
-final float REFERENCE_MIN_WEIGHT = 22;
-final float REFERENCE_MAX_WEIGHT = 68;
+final float REFERENCE_MIN_WEIGHT = 2;
+final float REFERENCE_MAX_WEIGHT = 5;
 
 float currentLineWeight;  // Will be set randomly on each run
 float minLineDistance;    // Minimum distance between lines
@@ -139,10 +140,10 @@ int canvasHeight;
 int gridSizeX;           // Number of horizontal divisions
 int gridSizeY;           // Number of vertical divisions
 
-String grammar = "CABDDDCDADD";
+String grammar = "ABBAABACDBDAABAADDACCDDDDCAABBAAACBDCCCBAADDCABDBDACAADDBCCCCCDADBBDBDBCDDABBABBAABCDABCABDBDADBABC";
 // see comments at grammarGenerator initialization and in GrammarGenerator.pde:
 int maxLetterRepetitionForGrammarGenerator = 11;
-float percentToPatch = 0.33;
+float percentToPatch = 0.67;
 
 // RAPID GEN mode - frame-based state machine (no background thread)
 boolean rapidGenMode = false;
@@ -171,26 +172,28 @@ int statusMessageTimer = 0;
 
 int placedLinesCount = 0;
 
+boolean renderLines = false;  // Set to false to hide lines
+
 // We can do this because of the tab or import of the code file GrammarGenerator.pde, in the same directory:
 GrammarGenerator grammarGenerator;
 
 // CUSTOM MONDRIAN PALETTE (inspired by color analysis of original works)
 // NOTE: #f6f6f6 (white) is EXCLUDED from this palette - it's reserved for canvas background only!
 color[] customMondrianPalette = {
-  #f22a27,  // Vibrant Mondrian red, and
-  #f89027,  // Warm Mondrian orange,
-  #ffcf30,  // Golden yellow,
-  #0f0c9b,  // Deep ultramarine blue,
-  #5168a3,  // Muted slate blue,
-  #b1b1b1,  // Cool gray, and
-  #050506   // Mondrian black
+  #bd002d,  // Old Glory more vibrant red, and
+//  #f89027,  // Warm Mondrian orange,
+//  #ffcf30,  // Golden yellow,
+  #3125b4,  // Old Glory more vibrant blue,
+//  #5168a3,  // Muted slate blue,
+//  #b1b1b1,  // Cool gray, and
+//  #050506   // Mondrian black
 };
 
 // Canvas white color (never used for patches)
 final color CANVAS_WHITE = #f6f6f6;
 
 // Line color (almost-black, warm)
-final color LINE_COLOR = #050506;
+final color LINE_COLOR = #27151e;
 
 // Color palette system
 color[] fullPalette;
@@ -244,8 +247,8 @@ void setup() {
   println("Grammar generator ready with " + grammarGenerator.getTotalCount() + " grammars");
 
   // Randomize initial grammar
-  grammar = grammarGenerator.getRandomGrammar();
-  println("Initial random grammar: " + grammar);
+  // grammar = grammarGenerator.getRandomGrammar();
+  // println("Initial random grammar: " + grammar);
 
   calculateLineWeight();
 
@@ -1117,17 +1120,25 @@ void drawLineBox(float x1, float y1, float x2, float y2, float thickness) {
   fill(LINE_COLOR);
 
   if (abs(x1 - x2) < 0.1) {
-    // Vertical box - force integer coordinates
-    float centerX = round(x1);
-    float top = round(y1);
-    float bottom = round(y2);
-    rect(centerX - halfThick, top, centerX + halfThick, bottom);
+    // Vertical box - force integer coordinates using floor/ceil to prevent gaps
+    float centerX = x1;
+    float top = y1;
+    float bottom = y2;
+    int left = (int)Math.floor(centerX - halfThick);
+    int right = (int)Math.floor(centerX + halfThick) + 1;
+    int topInt = (int)Math.floor(top);
+    int bottomInt = (int)Math.floor(bottom) + 1;
+    rect(left, topInt, right, bottomInt);
   } else if (abs(y1 - y2) < 0.1) {
-    // Horizontal box - force integer coordinates
-    float centerY = round(y1);
-    float left = round(x1);
-    float right = round(x2);
-    rect(left, centerY - halfThick, right, centerY + halfThick);
+    // Horizontal box - force integer coordinates using floor/ceil to prevent gaps
+    float centerY = y1;
+    float left = x1;
+    float right = x2;
+    int top = (int)Math.floor(centerY - halfThick);
+    int bottom = (int)Math.floor(centerY + halfThick) + 1;
+    int leftInt = (int)Math.floor(left);
+    int rightInt = (int)Math.floor(right) + 1;
+    rect(leftInt, top, rightInt, bottom);
   }
 }
 
@@ -1143,40 +1154,67 @@ void drawArtwork() {
       fill(200);  // Fallback gray (should never happen)
     }
 
-    float rx1 = round(getX(xs1.get(h)));
-    float ry1 = round(getY(ys1.get(h)));
-    float rx2 = round(getX(xs2.get(h)));
-    float ry2 = round(getY(ys2.get(h)));
+    // Use floor for left/top and floor+1 for right/bottom to prevent gaps
+    float x1_px = getX(xs1.get(h));
+    float y1_px = getY(ys1.get(h));
+    float x2_px = getX(xs2.get(h));
+    float y2_px = getY(ys2.get(h));
+    
+    int rx1 = (int)Math.floor(x1_px);
+    int ry1 = (int)Math.floor(y1_px);
+    int rx2 = (int)Math.floor(x2_px) + 1;
+    int ry2 = (int)Math.floor(y2_px) + 1;
+    
     rect(rx1, ry1, rx2, ry2);
   }
 
   // Draw grid lines as boxes
-  fill(LINE_COLOR);
-  noStroke();
-  float halfThick = currentLineWeight / 2.0f;
+  if (renderLines) {
+    fill(LINE_COLOR);
+    noStroke();
+    float halfThick = currentLineWeight / 2.0f;
 
-  for (int kk = 0; kk < A_add.size(); kk++) {
-    float x = round(getX(A_add.get(kk)));
-    rect(x - halfThick, 0, x + halfThick, artHeight);
-  }
+    // A lines - vertical full lines
+    for (int kk = 0; kk < A_add.size(); kk++) {
+      float x = getX(A_add.get(kk));
+      int left = (int)Math.floor(x - halfThick);
+      int right = (int)Math.floor(x + halfThick) + 1;
+      rect(left, 0, right, artHeight);
+    }
 
-  for (int kk = 0; kk < B_add.size(); kk++) {
-    float y = round(getY(B_add.get(kk)));
-    rect(0, y - halfThick, artWidth, y + halfThick);
-  }
+    // B lines - horizontal full lines
+    for (int kk = 0; kk < B_add.size(); kk++) {
+      float y = getY(B_add.get(kk));
+      int top = (int)Math.floor(y - halfThick);
+      int bottom = (int)Math.floor(y + halfThick) + 1;
+      rect(0, top, artWidth, bottom);
+    }
 
-  for (int kk = 0; kk < C_add.size(); kk++) {
-    float x = round(getX(C_add.get(kk)));
-    float y1 = round(getY(C_st.get(kk)));
-    float y2 = round(getY(C_ed.get(kk)));
-    rect(x - halfThick, y1, x + halfThick, y2);
-  }
+    // C lines - segmented vertical
+    for (int kk = 0; kk < C_add.size(); kk++) {
+      float x = getX(C_add.get(kk));
+      float y1 = getY(C_st.get(kk));
+      float y2 = getY(C_ed.get(kk));
+      
+      int left = (int)Math.floor(x - halfThick);
+      int right = (int)Math.floor(x + halfThick) + 1;
+      int top = (int)Math.floor(y1);
+      int bottom = (int)Math.floor(y2) + 1;
+      rect(left, top, right, bottom);
+    }
 
-  for (int kk = 0; kk < D_add.size(); kk++) {
-    float x1 = round(getX(D_st.get(kk)));
-    float x2 = round(getX(D_ed.get(kk)));
-    float y = round(getY(D_add.get(kk)));
-    rect(x1, y - halfThick, x2, y + halfThick);
+    // D lines - segmented horizontal
+    for (int kk = 0; kk < D_add.size(); kk++) {
+      float x1 = getX(D_st.get(kk));
+      float x2 = getX(D_ed.get(kk));
+      float y = getY(D_add.get(kk));
+      
+      int left = (int)Math.floor(x1);
+      int right = (int)Math.floor(x2) + 1;
+      int top = (int)Math.floor(y - halfThick);
+      int bottom = (int)Math.floor(y + halfThick) + 1;
+      rect(left, top, right, bottom);
+    }
   }
 }
 
@@ -1307,7 +1345,7 @@ void draw() {
       rapidGenExportDelay--;
     } else if (rapidGenExportQueued) {
       // Generate base name now for paired export
-      pendingExportBaseName = getTimestamp();
+      pendingExportBaseName = getExportFileBaseName();
       rapidGenExportQueued = false;
       rapidGenExportDelay = 2;  // Brief pause between cycles
       println("--- RAPID GEN: Cycle complete ---");
@@ -1374,7 +1412,7 @@ void draw() {
   }
 }
 
-String getTimestamp() {
+String getExportFileBaseName() {
   Calendar cal = Calendar.getInstance();
   String rnd_chars_for_timestamp_end = randomString(6);
   return String.format("%04d_%02d_%02d_%02d_%02d_%02d__%04d_%s",
@@ -1387,7 +1425,7 @@ String getTimestamp() {
 // PNG export function that handles basename creation
 // itself by creating the basename and passing it to the main function
 void exportToPNG() {
-  exportToPNG(getTimestamp());
+  exportToPNG(getExportFileBaseName());
 }
 
 // main PNG export function
@@ -1442,7 +1480,7 @@ void exportToPNG(String baseName) {
 // SVG export function that handles basename creation
 // itself by creating the basename and passing it to the main function
 void exportToSVG() {
-  exportToSVG(getTimestamp());
+  exportToSVG(getExportFileBaseName());
 }
 
 // Main SVG export function
@@ -1505,54 +1543,75 @@ void exportToSVG(String baseName) {
   // Draw canvas background using variable
   output.println("  <rect x=\"0\" y=\"0\" width=\"" + artWidth + "\" height=\"" + artHeight + "\" fill=\"#" + hex(CANVAS_WHITE, 6) + "\"/>");
 
-  // Draw all colored rectangles
+  // Draw all colored rectangles using floor/ceil to prevent gaps
   for (int h = 0; h < xs1.size(); h++) {
     float x = getX(xs1.get(h));
     float y = getY(ys1.get(h));
     float w = getX(xs2.get(h)) - x;
     float hgt = getY(ys2.get(h)) - y;
 
+    // Use floor for x/y and ceil for width/height to prevent gaps
+    int ix = (int)Math.floor(x);
+    int iy = (int)Math.floor(y);
+    int iw = (int)Math.ceil(w) + 1;
+    int ih = (int)Math.ceil(hgt) + 1;
+
     int paletteIndex = rec_col.get(h);
     color c = activePalette[paletteIndex % activePalette.length];
 
-    output.println("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + w + "\" height=\"" + hgt +
+    output.println("  <rect x=\"" + ix + "\" y=\"" + iy + "\" width=\"" + iw + "\" height=\"" + ih +
                    "\" fill=\"#" + hex(c, 6) + "\" stroke=\"none\"/>");
   }
 
   // Draw all grid lines as RECTANGLES using color from variable
-  output.println("  <g fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\">");
+  if (renderLines) {
+    output.println("  <g fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\">");
 
-  float halfThick = currentLineWeight / 2.0f;
+    float halfThick = currentLineWeight / 2.0f;
 
-  // Full vertical lines (boxes)
-  for (int kk = 0; kk < A_add.size(); kk++) {
-    float x = getX(A_add.get(kk));
-    output.println("    <rect x=\"" + (x - halfThick) + "\" y=\"0\" width=\"" + currentLineWeight + "\" height=\"" + artHeight + "\"/>");
+    // Full vertical lines (boxes)
+    for (int kk = 0; kk < A_add.size(); kk++) {
+      float x = getX(A_add.get(kk));
+      // Use floor for left, floor+1 for right to prevent gaps
+      float left = (float)Math.floor(x - halfThick);
+      float right = (float)Math.floor(x + halfThick) + 1;
+      output.println("    <rect x=\"" + left + "\" y=\"0\" width=\"" + (right - left) + "\" height=\"" + artHeight + "\" fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\"/>");
+    }
+
+    // Full horizontal lines (boxes)
+    for (int kk = 0; kk < B_add.size(); kk++) {
+      float y = getY(B_add.get(kk));
+      float top = (float)Math.floor(y - halfThick);
+      float bottom = (float)Math.floor(y + halfThick) + 1;
+      output.println("    <rect x=\"0\" y=\"" + top + "\" width=\"" + artWidth + "\" height=\"" + (bottom - top) + "\" fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\"/>");
+    }
+
+    // Segmented vertical lines (boxes)
+    for (int kk = 0; kk < C_add.size(); kk++) {
+      float x = getX(C_add.get(kk));
+      float y1 = getY(C_st.get(kk));
+      float y2 = getY(C_ed.get(kk));
+      float left = (float)Math.floor(x - halfThick);
+      float right = (float)Math.floor(x + halfThick) + 1;
+      float top = (float)Math.floor(y1);
+      float bottom = (float)Math.floor(y2) + 1;
+      output.println("    <rect x=\"" + left + "\" y=\"" + top + "\" width=\"" + (right - left) + "\" height=\"" + (bottom - top) + "\" fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\"/>");
+    }
+
+    // Segmented horizontal lines (boxes)
+    for (int kk = 0; kk < D_add.size(); kk++) {
+      float x1 = getX(D_st.get(kk));
+      float x2 = getX(D_ed.get(kk));
+      float y = getY(D_add.get(kk));
+      float left = (float)Math.floor(x1);
+      float right = (float)Math.floor(x2) + 1;
+      float top = (float)Math.floor(y - halfThick);
+      float bottom = (float)Math.floor(y + halfThick) + 1;
+      output.println("    <rect x=\"" + left + "\" y=\"" + top + "\" width=\"" + (right - left) + "\" height=\"" + (bottom - top) + "\" fill=\"#" + hex(LINE_COLOR, 6) + "\" stroke=\"none\"/>");
+    }
+
+    output.println("  </g>");
   }
-
-  // Full horizontal lines (boxes)
-  for (int kk = 0; kk < B_add.size(); kk++) {
-    float y = getY(B_add.get(kk));
-    output.println("    <rect x=\"0\" y=\"" + (y - halfThick) + "\" width=\"" + artWidth + "\" height=\"" + currentLineWeight + "\"/>");
-  }
-
-  // Segmented vertical lines (boxes)
-  for (int kk = 0; kk < C_add.size(); kk++) {
-    float x = getX(C_add.get(kk));
-    float y1 = getY(C_st.get(kk));
-    float y2 = getY(C_ed.get(kk));
-    output.println("    <rect x=\"" + (x - halfThick) + "\" y=\"" + y1 + "\" width=\"" + currentLineWeight + "\" height=\"" + (y2 - y1) + "\"/>");
-  }
-
-  // Segmented horizontal lines (boxes)
-  for (int kk = 0; kk < D_add.size(); kk++) {
-    float x1 = getX(D_st.get(kk));
-    float x2 = getX(D_ed.get(kk));
-    float y = getY(D_add.get(kk));
-    output.println("    <rect x=\"" + x1 + "\" y=\"" + (y - halfThick) + "\" width=\"" + (x2 - x1) + "\" height=\"" + currentLineWeight + "\"/>");
-  }
-
-  output.println("  </g>");
   output.println("</svg>");
   output.flush();
   output.close();
@@ -1563,7 +1622,7 @@ void exportToSVG(String baseName) {
 // Wrapper to export both formats with the same base name;
 // in all settings we do this it overrides export booleans, so no boolean checks:
 void exportVariant() {
-  String baseName = getTimestamp();
+  String baseName = getExportFileBaseName();
   exportToPNG(baseName);
   exportToSVG(baseName);
 }
