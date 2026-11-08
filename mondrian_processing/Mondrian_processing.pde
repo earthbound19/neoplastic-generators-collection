@@ -704,6 +704,14 @@ float getY(int gridPos) {
   return (float)gridPos * (float)artHeight / (float)gridSizeY;
 }
 
+int getPixelX(int gridPos) {
+  return Math.round((float)gridPos * (float)artWidth / (float)gridSizeX);
+}
+
+int getPixelY(int gridPos) {
+  return Math.round((float)gridPos * (float)artHeight / (float)gridSizeY);
+}
+
 // Check if a vertical line at gridX would be too close to existing vertical lines
 boolean isVerticalLineTooClose(int gridX, ArrayList<Integer> existingLines) {
   float pixelX = getX(gridX);
@@ -1144,9 +1152,13 @@ void drawLineBox(float x1, float y1, float x2, float y2, float thickness) {
 
 void drawArtwork() {
   // Draw colored patches using active palette (white NEVER appears here)
+  // Use shared, integer-aligned grid boundaries. Every shared boundary is
+  // calculated once by grid position, so adjacent patches cannot overlap
+  // because of independent rounding or +1 adjustments.
   for (int h = 0; h < xs1.size(); h++) {
     rectMode(CORNERS);
     noStroke();
+
     int paletteIndex = rec_col.get(h);
     if (activePalette.length > 0) {
       fill(activePalette[paletteIndex % activePalette.length]);
@@ -1154,18 +1166,12 @@ void drawArtwork() {
       fill(200);  // Fallback gray (should never happen)
     }
 
-    // Use floor for left/top and floor+1 for right/bottom to prevent gaps
-    float x1_px = getX(xs1.get(h));
-    float y1_px = getY(ys1.get(h));
-    float x2_px = getX(xs2.get(h));
-    float y2_px = getY(ys2.get(h));
-    
-    int rx1 = (int)Math.floor(x1_px);
-    int ry1 = (int)Math.floor(y1_px);
-    int rx2 = (int)Math.floor(x2_px) + 1;
-    int ry2 = (int)Math.floor(y2_px) + 1;
-    
-    rect(rx1, ry1, rx2, ry2);
+    int left = getPixelX(xs1.get(h));
+    int top = getPixelY(ys1.get(h));
+    int right = getPixelX(xs2.get(h));
+    int bottom = getPixelY(ys2.get(h));
+
+    rect(left, top, right, bottom);
   }
 
   // Draw grid lines as boxes
@@ -1195,7 +1201,7 @@ void drawArtwork() {
       float x = getX(C_add.get(kk));
       float y1 = getY(C_st.get(kk));
       float y2 = getY(C_ed.get(kk));
-      
+
       int left = (int)Math.floor(x - halfThick);
       int right = (int)Math.floor(x + halfThick) + 1;
       int top = (int)Math.floor(y1);
@@ -1208,7 +1214,7 @@ void drawArtwork() {
       float x1 = getX(D_st.get(kk));
       float x2 = getX(D_ed.get(kk));
       float y = getY(D_add.get(kk));
-      
+
       int left = (int)Math.floor(x1);
       int right = (int)Math.floor(x2) + 1;
       int top = (int)Math.floor(y - halfThick);
@@ -1543,24 +1549,26 @@ void exportToSVG(String baseName) {
   // Draw canvas background using variable
   output.println("  <rect x=\"0\" y=\"0\" width=\"" + artWidth + "\" height=\"" + artHeight + "\" fill=\"#" + hex(CANVAS_WHITE, 6) + "\"/>");
 
-  // Draw all colored rectangles using floor/ceil to prevent gaps
+  // Draw all colored rectangles using the same shared pixel boundaries
+  // as the raster renderer. Adjacent patches share edges exactly.
   for (int h = 0; h < xs1.size(); h++) {
-    float x = getX(xs1.get(h));
-    float y = getY(ys1.get(h));
-    float w = getX(xs2.get(h)) - x;
-    float hgt = getY(ys2.get(h)) - y;
+    int left = getPixelX(xs1.get(h));
+    int top = getPixelY(ys1.get(h));
+    int right = getPixelX(xs2.get(h));
+    int bottom = getPixelY(ys2.get(h));
 
-    // Use floor for x/y and ceil for width/height to prevent gaps
-    int ix = (int)Math.floor(x);
-    int iy = (int)Math.floor(y);
-    int iw = (int)Math.ceil(w) + 1;
-    int ih = (int)Math.ceil(hgt) + 1;
+    int width = right - left;
+    int height = bottom - top;
 
     int paletteIndex = rec_col.get(h);
     color c = activePalette[paletteIndex % activePalette.length];
 
-    output.println("  <rect x=\"" + ix + "\" y=\"" + iy + "\" width=\"" + iw + "\" height=\"" + ih +
-                   "\" fill=\"#" + hex(c, 6) + "\" stroke=\"none\"/>");
+    output.println("  <rect x=\"" + left +
+                   "\" y=\"" + top +
+                   "\" width=\"" + width +
+                   "\" height=\"" + height +
+                   "\" fill=\"#" + hex(c, 6) +
+                   "\" stroke=\"none\"/>");
   }
 
   // Draw all grid lines as RECTANGLES using color from variable
