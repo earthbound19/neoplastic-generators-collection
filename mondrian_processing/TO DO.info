@@ -1,0 +1,11 @@
+wanted fixes and new features:
+
+/ I find that SVGs show miniscule gaps between tiles with line rendering off. Let's see if using exact grid boundaries (float instead of rounding) _for SVGs only_ fixes that. Leave the raster boundary calculation alone; it's perfect.
+- A click of API COLORS, if it retrieves a palette with more colors than API MIN #COLORS, with API MAX #COLORS set to more than min (or 0), only displays as many colors from the palette as API MIN #COLORS on first retrieve (in my case, 3 colors). A press of "SHUFFLE COLOR" can randomly show more. I imagine that calling the shuffle color function the moment a new palette is retrieved via the API would solve that. Or something else? It's odd. It does show colors from the retrieved palette, but only (in this case) 3 of them.
+- a "TOGGLE LINES" button to the left of "SHUFFLE LINES," bumping the "RESET ALL" button to the right to fit it. A press of this button switches lines to visible or invisible.
+- to set the grammar maximum to 99, which I have tried to do here, but on press of "SHUFFLE GRAMMAR" it still clearly only gives 22 lines even if displaying a grammar of 99! What?
+- on press of ENTER in the "GRAMMAR MAX" field, the function to shuffle the grammar should be called AND shuffle lines should be called to obtain lines matching the new grammar constraint
+- add a "GRAMMAR MIN" button to the left of "GRAMMAR MAX", bumping "GRAMMAR MAX" and the buttons with it to the right. This field will set a minimum value so that for example if I set a min grammar of 40 and a max grammar of 50, it will always generate a grammer of 40-50 characters. Or if I set min to 99 and max to 99, it will always generate a grammar of 99 characters. Clamp the field value on entry to an absolute minimum of 1 and an absolute maximum of "GRAMMAR MAX." On entry of a value in this field also call the random grammar and shuffle lines functions.
+- right now the palette name display in the GUI can overlap a new shorter palette name display with an old one; fix this by clearing the display of the pallete name in the GUI before populating the new pallete. If it's already clearing, clear it to heck and back.
+
+See any pitfalls or have any recommendations?

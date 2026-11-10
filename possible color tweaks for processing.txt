@@ -1,0 +1,7 @@
+  #b41f33,  // Old Glory Red - slightly more saturated.
+//  #f89027,  // Warm Mondrian orange,
+//  #ffcf30,  // Golden yellow,
+  #3b3978     // Old Glory Blue - slightly more saturated
+//  #5168a3,  // Muted slate blue,
+//  #b1b1b1,  // Cool gray, and
+//  #050506   // Mondrian black

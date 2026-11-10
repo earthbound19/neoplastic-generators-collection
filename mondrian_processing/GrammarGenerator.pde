@@ -1,75 +1,93 @@
 // DESCRIPTION
 // GrammarGenerator.pde
-// Generates all possible sequences of letters A,B,C,D where:
-// - Each sequence length is between 1 and maxTotalLength
-// - Letters can appear in any order (all permutations with repetition)
-// - Total sequences = sum_{n=1}^{maxTotalLength} 4^n
-// 
-// Example with maxTotalLength=3: 
+// Generates one random sequence of letters A, B, C, and D on demand.
+// The selected sequence has a uniformly chosen position in the complete
+// set of all possible grammars of lengths 1 through maxTotalLength.
+//
+// Example with maxTotalLength=3:
 // Length 1: A, B, C, D
 // Length 2: AA, AB, AC, AD, BA, BB, BC, BD, CA, CB, CC, CD, DA, DB, DC, DD
 // Length 3: AAA, AAB, AAC, AAD, ... DDD
-// 
-// This gives ALL possible grammars, not just alphabetical-order grouped ones
-// (a previous version did that).
 //
-// WARNING: This grows exponentially! 4^1 + 4^2 + ... + 4^N
-// - N=4: 4 + 16 + 64 + 256 = 340 grammars
-// - N=5: 4 + 16 + 64 + 256 + 1024 = 1364 grammars
-// - N=6: 4 + 16 + 64 + 256 + 1024 + 4096 = 5460 grammars
-// - N=7: 4 + 16 + 64 + 256 + 1024 + 4096 + 16384 = 21844 grammars
-// - N=8: 4 + 16 + 64 + 256 + 1024 + 4096 + 16384 + 65536 = 87380 grammars
-// 
-// Use maxTotalLength carefully! Default 4 is safe and gives variety.
+// Repeated letters are unrestricted. The only limit is total string length.
 
 class GrammarGenerator {
-  ArrayList<String> allGrammars;
   int maxTotalLength;
-  String letters = "ABCD";
-  
-  // Constructor with default maxTotalLength = 4
+  final String letters = "ABCD";
+  long totalCount;
+
+  // Constructor with default maximum total grammar length of 11.
   GrammarGenerator() {
-    this(4);  // Default to 4
+    this(11);
   }
-  
-  // Constructor with custom maxTotalLength
+
+  // Constructor with custom maximum total grammar length.
   GrammarGenerator(int maxLen) {
+    setMaxTotalLength(maxLen);
+  }
+
+  // Change the maximum dynamically without generating or storing grammars.
+  void setMaxTotalLength(int maxLen) {
+    if (maxLen < 1) {
+      throw new IllegalArgumentException("Maximum grammar length must be at least 1.");
+    }
+    if (maxLen > 99) {
+      throw new IllegalArgumentException("Maximum grammar length cannot exceed 99.");
+    }
+
     maxTotalLength = maxLen;
-    allGrammars = new ArrayList<String>();
-    generateAllGrammars();
-    println("Generated " + allGrammars.size() + " grammars (max length " + maxTotalLength + ")");
+    totalCount = calculateTotalCount(maxTotalLength);
   }
-  
-  void generateAllGrammars() {
-    // Generate all sequences from length 1 to maxTotalLength
-    for (int len = 1; len <= maxTotalLength; len++) {
-      generateSequences("", len);
+
+  // Sum 4^1 + 4^2 + ... + 4^maxTotalLength.
+  // At the supported maximum of 26, this fits in a Java long and remains
+  // below the exact-integer range of a double, which is used for selection.
+  long calculateTotalCount(int maxLen) {
+    long count = 0;
+    long sequencesAtLength = 1;
+
+    for (int len = 1; len <= maxLen; len++) {
+      sequencesAtLength *= 4L;
+      count += sequencesAtLength;
     }
+
+    return count;
   }
-  
-  // Recursive helper to generate all sequences of exact length
-  void generateSequences(String prefix, int remaining) {
-    if (remaining == 0) {
-      allGrammars.add(prefix);
-      return;
-    }
-    for (int i = 0; i < letters.length(); i++) {
-      generateSequences(prefix + letters.charAt(i), remaining - 1);
-    }
-  }
-  
+
   String getRandomGrammar() {
-    if (allGrammars.isEmpty()) return "AABBCCDDDDDD"; // fallback
-    int randomIndex = (int)random(allGrammars.size());
-    String selected = allGrammars.get(randomIndex);
-    println("GrammarGenerator: Selected grammar #" + randomIndex + ": " + selected);
+    // Select one index uniformly from the complete set of possible grammars.
+    long randomIndex = (long)(Math.random() * (double)totalCount);
+
+    // Determine which length contains the selected index.
+    int selectedLength = 1;
+    long sequencesAtLength = 4L;
+
+    while (randomIndex >= sequencesAtLength) {
+      randomIndex -= sequencesAtLength;
+      selectedLength++;
+      sequencesAtLength *= 4L;
+    }
+
+    // Convert the index within that length into a base-4 sequence.
+    // Leading zero digits are retained, so every selected sequence has
+    // exactly selectedLength letters.
+    char[] result = new char[selectedLength];
+
+    for (int position = selectedLength - 1; position >= 0; position--) {
+      int digit = (int)(randomIndex % 4L);
+      result[position] = letters.charAt(digit);
+      randomIndex /= 4L;
+    }
+
+    String selected = new String(result);
+    println("GrammarGenerator: Selected random grammar: " + selected);
     return selected;
   }
-  
-  int getTotalCount() {
-    return allGrammars.size();
+
+  long getTotalCount() {
+    return totalCount;
   }
-  
+
   int getMaxTotalLength() {
     return maxTotalLength;
   }

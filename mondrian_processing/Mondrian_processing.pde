@@ -73,7 +73,7 @@
 //  - how? simply delete or never render the black lines around them? I think they may be fills, not lines. also at: https://www.wikiart.org/en/piet-mondrian/composition-no-10-1942
 
 
-String scriptVersion = "2.24.6";
+String scriptVersion = "2.31.15";
 String scriptName = "Mondrian_Processing";
 String paletteSource = "custom_mondrian";
 String lastAPIPaletteName = "";
@@ -141,8 +141,10 @@ int gridSizeX;           // Number of horizontal divisions
 int gridSizeY;           // Number of vertical divisions
 
 String grammar = "ABBAABACDBDAABAADDACCDDDDCAABBAAACBDCCCBAADDCABDBDACAADDBCCCCCDADBBDBDBCDDABBABBAABCDABCABDBDADBABC";
-// see comments at grammarGenerator initialization and in GrammarGenerator.pde:
-int maxLetterRepetitionForGrammarGenerator = 11;
+// Maximum total number of letters in a randomly generated grammar.
+// This is configurable at runtime through the GRAMMAR MAX UI field.
+int maxGrammarLength = 54;
+final int MAX_GRAMMAR_LENGTH_LIMIT = 99;
 float percentToPatch = 0.67;
 
 // RAPID GEN mode - frame-based state machine (no background thread)
@@ -240,11 +242,11 @@ void settings() {
 void setup() {
   surface.setTitle(scriptName + " v" + scriptVersion);
 
-  // Initialize grammar generator; can pass any integer but counts will explode at higher numbers;
-  // Generates grammars like A...B...C...D... with configurable max per letter; passing it 4 will
-  // allow up to 4 repetition of A like AAAA, or B like BBBB, etc, or C or D:
-  grammarGenerator = new GrammarGenerator(maxLetterRepetitionForGrammarGenerator);
-  println("Grammar generator ready with " + grammarGenerator.getTotalCount() + " grammars");
+  // Initialize a random grammar generator. It generates one grammar on demand.
+  grammarGenerator = new GrammarGenerator(maxGrammarLength);
+  println("Grammar generator ready: maximum total grammar length " +
+          grammarGenerator.getMaxTotalLength() + ", possible grammars " +
+          grammarGenerator.getTotalCount());
 
   // Randomize initial grammar
   // grammar = grammarGenerator.getRandomGrammar();
@@ -347,6 +349,53 @@ void grammarField(String value) {
       colour();
     }
   }
+}
+
+void grammarMaxField(String value) {
+  String enteredValue = value.trim();
+  int requestedMax;
+
+  try {
+    requestedMax = Integer.parseInt(enteredValue);
+  } catch (NumberFormatException e) {
+    String errMsg = "ERROR: GRAMMAR MAX must be an integer from 1 to " +
+                    MAX_GRAMMAR_LENGTH_LIMIT + ". Keeping " + maxGrammarLength + ".";
+    println(errMsg);
+    errorLabel.setText(errMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 5000;
+    grammarMaxField.setText(str(maxGrammarLength));
+    return;
+  }
+
+  if (requestedMax < 1) {
+    String errMsg = "ERROR: GRAMMAR MAX must be at least 1. Keeping " +
+                    maxGrammarLength + ".";
+    println(errMsg);
+    errorLabel.setText(errMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 5000;
+    grammarMaxField.setText(str(maxGrammarLength));
+    return;
+  }
+
+  if (requestedMax > MAX_GRAMMAR_LENGTH_LIMIT) {
+    String errMsg = "WARNING: GRAMMAR MAX is limited to " +
+                    MAX_GRAMMAR_LENGTH_LIMIT + " to keep random selection precise and practical.";
+    println(errMsg);
+    errorLabel.setText(errMsg);
+    errorLabel.setVisible(true);
+    errorLabelHideTime = millis() + 5000;
+    requestedMax = MAX_GRAMMAR_LENGTH_LIMIT;
+  }
+
+  maxGrammarLength = requestedMax;
+  grammarGenerator.setMaxTotalLength(maxGrammarLength);
+  grammarMaxField.setText(str(maxGrammarLength));
+
+  println("GRAMMAR MAX updated to " + maxGrammarLength +
+          " (possible grammars: " + grammarGenerator.getTotalCount() + ")");
+  resetStatusMessage();
 }
 
 void percentField(String value) {
@@ -472,6 +521,10 @@ void resetAll() {
   if (rapidGenMode) stopRapidGenMode();
   grammar = "AABBCCDDDDDD";
   grammarField.setText(grammar);
+  maxGrammarLength = 11;
+  grammarGenerator.setMaxTotalLength(maxGrammarLength);
+  grammarMaxField.setText(str(maxGrammarLength));
+  println("GRAMMAR MAX reset to " + maxGrammarLength);
   percentToPatch = 0.33;
   percentField.setText("33");
 
@@ -1153,12 +1206,10 @@ void drawLineBox(float x1, float y1, float x2, float y2, float thickness) {
 void drawArtwork() {
   // Draw colored patches using active palette (white NEVER appears here)
   // Use shared, integer-aligned grid boundaries. Every shared boundary is
-  // calculated once by grid position, so adjacent patches cannot overlap
-  // because of independent rounding or +1 adjustments.
+  // calculated once by grid position.
   for (int h = 0; h < xs1.size(); h++) {
     rectMode(CORNERS);
     noStroke();
-
     int paletteIndex = rec_col.get(h);
     if (activePalette.length > 0) {
       fill(activePalette[paletteIndex % activePalette.length]);
@@ -1549,26 +1600,30 @@ void exportToSVG(String baseName) {
   // Draw canvas background using variable
   output.println("  <rect x=\"0\" y=\"0\" width=\"" + artWidth + "\" height=\"" + artHeight + "\" fill=\"#" + hex(CANVAS_WHITE, 6) + "\"/>");
 
-  // Draw all colored rectangles using the same shared pixel boundaries
-  // as the raster renderer. Adjacent patches share edges exactly.
   for (int h = 0; h < xs1.size(); h++) {
-    int left = getPixelX(xs1.get(h));
-    int top = getPixelY(ys1.get(h));
-    int right = getPixelX(xs2.get(h));
-    int bottom = getPixelY(ys2.get(h));
-
-    int width = right - left;
-    int height = bottom - top;
-
+    // FAILED OPTION: draw all colored rectangles using the same shared pixel boundaries
+    // as the raster renderer. Adjacent patches share edges exactly.
+    // int left = getPixelX(xs1.get(h));
+    // int top = getPixelY(ys1.get(h));
+    // int right = getPixelX(xs2.get(h));
+    // int bottom = getPixelY(ys2.get(h));
+    // WORKING OPTION: draw all colored rectangles using exact float coordinates.
+    float left   = (float)xs1.get(h) * (float)artWidth  / (float)gridSizeX;
+    float top    = (float)ys1.get(h) * (float)artHeight / (float)gridSizeY;
+    float right  = (float)xs2.get(h) * (float)artWidth  / (float)gridSizeX;
+    float bottom = (float)ys2.get(h) * (float)artHeight / (float)gridSizeY;
+    
+    float width  = right - left;
+    float height = bottom - top;
+    
     int paletteIndex = rec_col.get(h);
     color c = activePalette[paletteIndex % activePalette.length];
-
-    output.println("  <rect x=\"" + left +
-                   "\" y=\"" + top +
-                   "\" width=\"" + width +
-                   "\" height=\"" + height +
-                   "\" fill=\"#" + hex(c, 6) +
-                   "\" stroke=\"none\"/>");
+    
+    // crispEdges is essential, not cosmetic: it suppresses per-shape anti-aliasing
+    // that otherwise leaves a background hairline at every shared tile boundary.
+    // Verified across Firefox, Inkscape, CairoSVG, and arbitrary zoom/resize.
+    // Fallback if a renderer ignores the hint: a tiny same-color stroke (~0.06–0.5).
+    output.println("  <rect x=\"" + left + "\" y=\"" + top + "\" width=\"" + width + "\" height=\"" + height + "\" fill=\"#" + hex(c, 6) + "\" stroke=\"none\"" + " shape-rendering=\"crispEdges\"/>");
   }
 
   // Draw all grid lines as RECTANGLES using color from variable

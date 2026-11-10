@@ -19,6 +19,7 @@ color uiErrorColor = color(#f22a27);      // Mondrian red
 // ControlP5 components (declared globally)
 ControlP5 cp5;
 Textfield grammarField;
+Textfield grammarMaxField;
 Textfield percentField;
 Textfield colorCountField;
 Textfield apiColorsMinField;
@@ -49,6 +50,7 @@ void setupUI() {
   int rowHeight = 25;
   int labelX = 10;
   int fieldY = uiY + 10;
+  int maxGrammarLength = 99;
   
   grammarField = cp5.addTextfield("grammarField")
      .setPosition(labelX, fieldY)
@@ -58,14 +60,26 @@ void setupUI() {
      .setAutoClear(false)
      .setColorCaptionLabel(color(255));
 
+   int shuffleGrammarWidth = buttonWidth + spacing;
    cp5.addButton("shuffleGrammar")
       .setPosition(labelX + fieldWidth + spacing, fieldY)
-      .setSize(buttonWidth + spacing, rowHeight)
+      .setSize(shuffleGrammarWidth, rowHeight)
       .setLabel("SHUFFLE GRAMMAR")
       .setColorCaptionLabel(color(255));
 
+  int grammarMaxX = labelX + fieldWidth + spacing + shuffleGrammarWidth + spacing;
+  grammarMaxField = cp5.addTextfield("grammarMaxField")
+     .setPosition(grammarMaxX, fieldY)
+     .setSize(smallFieldWidth, rowHeight)
+     .setText(str(maxGrammarLength))
+     .setLabel("GRAMMAR MAX")
+     .setAutoClear(false)
+     .setColorCaptionLabel(color(255));
+
+  int shiftedFieldsX = grammarMaxX + smallFieldWidth + spacing;
+
   percentField = cp5.addTextfield("percentField")
-     .setPosition(labelX + spacing + buttonWidth + spacing + fieldWidth + spacing, fieldY)
+     .setPosition(shiftedFieldsX, fieldY)
      .setSize(smallFieldWidth, rowHeight)
      .setText(str(int(percentToPatch * 100)))
      .setLabel("FILL %")
@@ -73,7 +87,7 @@ void setupUI() {
      .setColorCaptionLabel(color(255));
 
   colorCountField = cp5.addTextfield("colorCountField")
-     .setPosition(labelX + spacing + buttonWidth + spacing + fieldWidth + spacing + smallFieldWidth + spacing, fieldY)
+     .setPosition(shiftedFieldsX + smallFieldWidth + spacing, fieldY)
      .setSize(smallFieldWidth, rowHeight)
      .setText("7")
      .setLabel("#COLORS, 0=ALL")
@@ -81,7 +95,7 @@ void setupUI() {
      .setColorCaptionLabel(color(255));
 
   apiColorsMinField = cp5.addTextfield("apiColorsMinField")
-     .setPosition(labelX + spacing + buttonWidth + spacing + fieldWidth + spacing + ((smallFieldWidth + spacing) * 2), fieldY)
+     .setPosition(shiftedFieldsX + (smallFieldWidth + spacing) * 2, fieldY)
      .setSize(smallFieldWidth, rowHeight)
      .setText("3")
      .setLabel(" API MIN #COLORS")
@@ -89,7 +103,7 @@ void setupUI() {
      .setColorCaptionLabel(color(255));
 
   apiColorsMaxField = cp5.addTextfield("apiColorsMaxField")
-     .setPosition(labelX + spacing + buttonWidth + spacing + fieldWidth + spacing + ((smallFieldWidth + spacing) * 3), fieldY)
+     .setPosition(shiftedFieldsX + (smallFieldWidth + spacing) * 3, fieldY)
      .setSize(smallFieldWidth, rowHeight)
      .setText("0")
      .setLabel("API MAX #COLORS\n0=NO MAX")
