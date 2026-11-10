@@ -856,6 +856,11 @@ void fetchColorsFromAPI() {
         colorCountField.setText(str(fullPalette.length));
         // and use the palette (including that fields' potentially changed number from the palette color count)
         updateActivePalette();
+        // Reassign colors to patches using the newly retrieved palette (only if rapidGenMode is not active,
+        // as that mode does the same thing with ever generation)
+        if (!rapidGenMode) {
+          colour();
+        }
         // Signal that new palette is ready
         newPaletteReady = true;
 
